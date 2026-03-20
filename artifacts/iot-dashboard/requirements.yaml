@@ -1,0 +1,12 @@
+packages:
+  "framer-motion": "For smooth animations and transitions on sensor cards and warnings"
+  "date-fns": "For formatting the last update timestamp"
+  "clsx": "For conditional class names"
+  "tailwind-merge": "For conditional class names"
+  "@hookform/resolvers": "For Zod form validation"
+
+images: []
+
+notes:
+  - "Using provided @workspace/api-client-react hooks for API interaction"
+  - "Dashboard uses dark mode techy aesthetic with glowing elements for warnings"

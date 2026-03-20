@@ -1,8 +1,16 @@
-# Workspace
+# Workspace — IoT Dashboard for Yolobit
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+pnpm workspace monorepo using TypeScript. IoT Dashboard for Yolobit sensor device — displays realtime temperature, humidity, and luminosity data, and allows control of servo, LED, fan, and RGB outputs.
+
+## Features
+- Realtime sensor display (1s polling) — Temperature, Humidity, Luminosity
+- Warning alerts when temperature > tempMax or humidity < humidMin
+- Device controls: Servo (open/close), LED (on/off), Fan (33%/66%/100%/off), RGB (on/off)
+- Alert threshold configuration
+- Serial port connection (USB) + Demo mode for testing without hardware
+- Auto-reconnect on serial disconnect
 
 ## Stack
 

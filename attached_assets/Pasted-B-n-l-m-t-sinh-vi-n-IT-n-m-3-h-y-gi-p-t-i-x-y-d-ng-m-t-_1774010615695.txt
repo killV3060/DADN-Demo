@@ -1,0 +1,286 @@
+Bạn là một sinh viên IT năm 3, hãy giúp tôi xây dựng một hệ thống Dashboard IoT theo mô hình MVC dựa trên đoạn code yolobit.py bên dưới.
+________________________________________
+🎯 Mục tiêu
+•	Kết nối với thiết bị Yolobit thật
+•	Lấy dữ liệu cảm biến:
+o	Temperature
+o	Humidity
+o	Luminosity
+•	Hiển thị trên web dashboard realtime
+•	Có thể gửi lệnh điều khiển lại thiết bị (servo, LED, quạt,...)
+________________________________________
+⚙️ Yêu cầu kiến trúc (QUAN TRỌNG)
+1. Áp dụng mô hình MVC nhưng TỐI GIẢN:
+•	Model
+o	Xử lý dữ liệu từ Yolobit (parse dữ liệu từ serial / wifi)
+o	Dữ liệu có format:
+!1:T:xx#!1:H:yy#!1:L:zz#
+•	Controller
+o	API Flask:
+	GET /api/data → trả JSON:
+{
+  "temperature": ...,
+  "humidity": ...,
+  "luminosity": ...
+}
+	POST /api/control → gửi lệnh xuống thiết bị (1→10 giống code)
+•	View
+o	HTML + CSS + JS (KHÔNG dùng framework nặng)
+o	Dashboard hiển thị:
+	Temperature
+	Humidity
+	Luminosity
+o	Có nút điều khiển:
+	Servo (1,2)
+	LED (3,4)
+	Fan (5→8)
+	RGB (9,10)
+________________________________________
+⚡ Realtime requirement
+•	Frontend phải update realtime
+•	Sử dụng:
+o	fetch + setInterval (1s) (đơn giản)
+o	hoặc WebSocket nếu muốn nâng cao
+________________________________________
+📂 Yêu cầu về số lượng file (RẤT QUAN TRỌNG)
+Tối giản nhất có thể:
+•	app.py → Flask + Controller
+•	model.py → xử lý dữ liệu Yolobit
+•	templates/index.html → UI
+•	static/script.js → gọi API
+👉 Không tạo file thừa, không over-engineering
+________________________________________
+🔌 Kết nối với Yolobit
+Từ code tôi cung cấp, thiết bị đang:
+•	In dữ liệu qua:
+print('!1:T:...#!1:H:...#!1:L:...#')
+👉 Bạn cần:
+•	Viết code Python đọc từ:
+o	Serial (USB COM)
+o	hoặc Socket nếu dùng WiFi
+________________________________________
+🎨 UI yêu cầu
+•	Giao diện đơn giản:
+o	Card hiển thị 3 thông số
+•	Màu sắc:
+o	Đỏ nếu nhiệt độ vượt temp_max
+o	Xanh nếu ổn định
+•	Có button control
+________________________________________
+🧠 Logic cần xử lý thêm từ code Yolobit:
+•	Nếu:
+o	Temperature > temp_max → cảnh báo
+o	Humidity < humid_min → cảnh báo
+•	Hiển thị cảnh báo trên dashboard
+________________________________________
+🧾 Coding style:
+•	Code như sinh viên năm 3:
+o	Dễ đọc
+o	Không quá phức tạp
+o	Có comment ngắn gọn
+•	Ưu tiên:
+o	Chạy được
+o	Dễ hiểu
+o	Ít bug
+________________________________________
+📌 Input (code của tôi):
+from event_manager import *
+import sys
+import uselect
+from yolobit import *
+button_a.on_pressed = None
+button_b.on_pressed = None
+button_a.on_pressed_ab = button_b.on_pressed_ab = -1
+import music
+from machine import Pin, SoftI2C
+from aiot_dht20 import DHT20
+from aiot_lcd1602 import LCD1602
+from machine import RTC
+from wifi import __wifi__
+import ntptime
+import time
+from aiot_rgbled import RGBLed
+
+event_manager.reset()
+
+def read_terminal_input():
+  spoll=uselect.poll()        # Set up an input polling object.
+  spoll.register(sys.stdin, uselect.POLLIN)    # Register polling object.
+
+  input = ''
+  if spoll.poll(0):
+    input = sys.stdin.read(1)
+
+    while spoll.poll(0):
+      input = input + sys.stdin.read(1)
+
+  spoll.unregister(sys.stdin)
+  return input
+
+def on_event_timer_callback_y_w_a_N_x():
+  global cmd, Temperature, warning, Humidity, Luminosity, humid_min, temp_max, security
+  cmd = read_terminal_input()
+  if cmd == '1':
+    pin6.servo_write(0, max=270)
+  elif cmd == '2':
+    pin6.servo_write(180, max=270)
+  if cmd == '3':
+    display.set_all('#ff0000')
+  elif cmd == '4':
+    display.set_all('#000000')
+  if cmd == '5':
+    pin10.write_analog(round(translate(33, 0, 100, 0, 1023)))
+  elif cmd == '6':
+    pin10.write_analog(round(translate(66, 0, 100, 0, 1023)))
+  if cmd == '7':
+    pin10.write_analog(round(translate(100, 0, 100, 0, 1023)))
+  elif cmd == '8':
+    pin10.write_analog(round(translate(0, 0, 100, 0, 1023)))
+  if cmd == '9':
+    pin14.write_analog(round(translate(50, 0, 100, 0, 1023)))
+  elif cmd == '10':
+    pin14.write_analog(round(translate(0, 0, 100, 0, 1023)))
+  if len(cmd) == 7:
+    temp_max = int(cmd)
+    if temp_max < Temperature:
+      music.play(['G3:1'], wait=True)
+    print(temp_max, end =' ')
+  elif len(cmd) == 9:
+    humid_min = int(cmd)
+    if humid_min > Humidity:
+      music.play(['A3:1'], wait=True)
+    print(humid_min, end =' ')
+  cmd = 0
+
+event_manager.add_timer_event(200, on_event_timer_callback_y_w_a_N_x)
+
+aiot_dht20 = DHT20()
+
+aiot_lcd1602 = LCD1602()
+
+def on_event_timer_callback_J_t_P_O_l():
+  global cmd, Temperature, warning, Humidity, Luminosity, humid_min, temp_max, security
+  aiot_dht20.read_dht20()
+  Temperature = aiot_dht20.dht20_temperature()
+  Humidity = aiot_dht20.dht20_humidity()
+  Luminosity = round(translate((pin0.read_analog()), 0, 4095, 0, 100))
+  aiot_lcd1602.move_to(0, 0)
+  aiot_lcd1602.putstr(Temperature)
+  aiot_lcd1602.move_to(4, 0)
+  aiot_lcd1602.putstr('*C')
+  aiot_lcd1602.move_to(6, 0)
+  aiot_lcd1602.putstr(' ')
+  aiot_lcd1602.move_to(7, 0)
+  aiot_lcd1602.putstr(Humidity)
+  aiot_lcd1602.move_to(11, 0)
+  aiot_lcd1602.putstr('%')
+  aiot_lcd1602.move_to(12, 0)
+  aiot_lcd1602.putstr(' ')
+  aiot_lcd1602.move_to(13, 0)
+  aiot_lcd1602.putstr(' ')
+  aiot_lcd1602.move_to(14, 0)
+  aiot_lcd1602.putstr(' ')
+  aiot_lcd1602.move_to(15, 0)
+  aiot_lcd1602.putstr(' ')
+  aiot_lcd1602.move_to(0, 1)
+  aiot_lcd1602.putstr(('%0*d' % (2, RTC().datetime()[4])))
+  aiot_lcd1602.move_to(2, 1)
+  aiot_lcd1602.putstr(':')
+  aiot_lcd1602.move_to(3, 1)
+  aiot_lcd1602.putstr(('%0*d' % (2, RTC().datetime()[5])))
+  aiot_lcd1602.move_to(5, 1)
+  aiot_lcd1602.putstr(':')
+  aiot_lcd1602.move_to(6, 1)
+  aiot_lcd1602.putstr(('%0*d' % (2, RTC().datetime()[6])))
+
+event_manager.add_timer_event(1000, on_event_timer_callback_J_t_P_O_l)
+
+tiny_rgb = RGBLed(pin14.pin, 4)
+
+def on_event_timer_callback_c_E_X_m_G():
+  global cmd, Temperature, warning, Humidity, Luminosity, humid_min, temp_max, security
+  print((''.join([str(x) for x in ['!1:T:', Temperature, '#', '!1:H:', Humidity, '#', '!1:L:', Luminosity, '#']])), end =' ')
+
+event_manager.add_timer_event(30000, on_event_timer_callback_c_E_X_m_G)
+
+def on_button_a_pressed():
+  global cmd, Temperature, warning, Humidity, Luminosity, humid_min, temp_max, security
+  if Temperature > temp_max:
+    aiot_lcd1602.clear()
+    aiot_lcd1602.move_to(0, 0)
+    aiot_lcd1602.putstr('Weather:  Hot')
+    pin10.write_analog(round(translate(33, 0, 100, 0, 1023)))
+    time.sleep_ms(5000)
+    pin10.write_analog(round(translate(0, 0, 100, 0, 1023)))
+  else:
+    aiot_lcd1602.clear()
+    aiot_lcd1602.move_to(0, 0)
+    aiot_lcd1602.putstr('Weather: Good')
+    pin10.write_analog(round(translate(0, 0, 100, 0, 1023)))
+    time.sleep_ms(2000)
+
+button_a.on_pressed = on_button_a_pressed
+
+def on_button_b_pressed():
+  global cmd, Temperature, warning, Humidity, Luminosity, humid_min, temp_max, security
+  if Humidity < humid_min:
+    aiot_lcd1602.clear()
+    aiot_lcd1602.move_to(0, 0)
+    aiot_lcd1602.putstr('Humidity: Not Good')
+    pin3.write_analog(round(translate(50, 0, 100, 0, 1023)))
+    time.sleep_ms(5000)
+    pin3.write_analog(round(translate(0, 0, 100, 0, 1023)))
+  else:
+    aiot_lcd1602.clear()
+    aiot_lcd1602.move_to(0, 0)
+    aiot_lcd1602.putstr('Humidity: Good')
+    pin3.write_analog(round(translate(0, 0, 100, 0, 1023)))
+    time.sleep_ms(2000)
+
+button_b.on_pressed = on_button_b_pressed
+
+if True:
+  __wifi__.connect_wifi('killV', '99999999')
+  ntptime.settime()
+  (year, month, mday, week_of_year, hour, minute, second, milisecond) = RTC().datetime()
+  RTC().init((year, month, mday, week_of_year, hour+7, minute, second, milisecond))
+  aiot_lcd1602.move_to(5, 0)
+  aiot_lcd1602.putstr('Hello')
+  tiny_rgb.show(0, hex_to_rgb('#000000'))
+  display.scroll('AIOT')
+  aiot_lcd1602.clear()
+  temp_max = 0
+  humid_min = 0
+  Temperature = 0
+  Humidity = 0
+  Luminosity = 0
+
+while True:
+  event_manager.run()
+  time.sleep_ms(1000)
+  time.sleep_ms(10)
+
+''
+
+________________________________________
+📤 Output mong muốn:
+•	Full source code:
+o	Backend (Flask)
+o	Frontend (HTML/CSS/JS)
+•	Hướng dẫn chạy:
+o	Cài thư viện
+o	Chọn COM port
+•	Demo flow:
+o	Khi Yolobit gửi data → web update
+o	Khi bấm nút → gửi lệnh xuống thiết bị
+________________________________________
+🚀 Bonus (nếu làm được):
+•	Tự reconnect khi mất kết nối
+•	Log dữ liệu
+•	UI đẹp hơn chút (nhưng không cần React)
+________________________________________
+⚠️ Lưu ý:
+•	Không dùng framework nặng (React, Angular,...)
+•	Không tách quá nhiều file
+•	Không viết theo kiểu production-level phức tạp
+
