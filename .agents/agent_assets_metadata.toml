@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "21bRfyoZxcRZK8Bxi8L5p"
+uri = "file://README.md"
+type = "text"
+title = "README.md — Yolobit IoT Dashboard"
