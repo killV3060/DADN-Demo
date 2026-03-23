@@ -16,7 +16,9 @@ export function ConnectionPanel() {
   const queryClient = useQueryClient();
 
   const { data: status, isLoading: statusLoading } = useGetConnectionStatus({
-    query: { refetchInterval: 5000 } // Poll status every 5s
+    query: { 
+      queryKey: ['sensor-data'],
+      refetchInterval: 5000 } // Poll status every 5s
   });
 
   const { data: portsData, refetch: refetchPorts, isFetching: fetchingPorts } = useListSerialPorts();
@@ -35,7 +37,7 @@ export function ConnectionPanel() {
         toast({
           variant: "destructive",
           title: "Connection Failed",
-          description: error.error?.error || "Unknown error occurred"
+          description: (error as any).error || "Unknown error occurred" //khá căng thẳng đoạn này tại chưa biết cấu hình error sao
         });
       }
     }
@@ -92,9 +94,9 @@ export function ConnectionPanel() {
             className="w-full bg-background/50 border border-border/50 text-foreground text-sm rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary block pl-10 p-2.5 appearance-none disabled:opacity-50"
           >
             <option value="demo">Demo Mode (Simulation)</option>
-            {portsData?.ports.map(port => (
+            {portsData?.ports?.map(port => (
               <option key={port} value={port}>{port}</option>
-            ))}
+            )) || null }
           </select>
         </div>
         

@@ -11,6 +11,7 @@ import { ThresholdSettings } from "@/components/dashboard/ThresholdSettings";
 export default function Dashboard() {
   const { data: sensorData, isError, error } = useGetSensorData({
     query: { 
+      queryKey: ['sensor-data'],
       refetchInterval: 1000,
       retry: 2
     }

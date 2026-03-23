@@ -69,7 +69,7 @@ export function ControlPanel() {
         toast({
           variant: "destructive",
           title: "Command Failed",
-          description: error.error?.error || "Failed to communicate with device",
+          description: (error as any)?.error || "Failed to communicate with device",
         });
       }
     }

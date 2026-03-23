@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import { AlertCircle, Save, Thermometer, Droplets } from "lucide-react";
 import { GlassCard } from "../ui/glass-card";
-import { useGetThresholds, useSetThresholds } from "@workspace/api-client-react";
+import {
+  useGetThresholds,
+  useSetThresholds,
+} from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -28,21 +31,21 @@ export function ThresholdSettings() {
           title: "Update Failed",
           description: "Could not save thresholds to the device.",
         });
-      }
-    }
+      },
+    },
   });
 
   useEffect(() => {
     if (thresholds) {
-      setTempMax(thresholds.tempMax.toString());
-      setHumidMin(thresholds.humidMin.toString());
+      setTempMax(thresholds.tempMax?.toString() ?? "40");
+      setHumidMin(thresholds.humidMin?.toString() ?? "30");
     }
   }, [thresholds]);
 
   const handleSave = () => {
     const parsedTemp = parseFloat(tempMax);
     const parsedHumid = parseFloat(humidMin);
-    
+
     if (isNaN(parsedTemp) || isNaN(parsedHumid)) {
       toast({
         variant: "destructive",
@@ -55,8 +58,8 @@ export function ThresholdSettings() {
     saveThresholds({
       data: {
         tempMax: parsedTemp,
-        humidMin: parsedHumid
-      }
+        humidMin: parsedHumid,
+      },
     });
   };
 
@@ -67,8 +70,12 @@ export function ThresholdSettings() {
           <AlertCircle className="w-5 h-5" />
         </div>
         <div>
-          <h2 className="font-display text-xl font-semibold">Alert Thresholds</h2>
-          <p className="text-xs text-muted-foreground mt-1">Configure when warnings trigger</p>
+          <h2 className="font-display text-xl font-semibold">
+            Alert Thresholds
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            Configure when warnings trigger
+          </p>
         </div>
       </div>
 

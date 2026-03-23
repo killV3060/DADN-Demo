@@ -18,6 +18,7 @@ export default defineConfig({
     input: {
       target: "./openapi.yaml",
       override: {
+
         transformer: titleTransformer,
       },
     },
@@ -30,6 +31,11 @@ export default defineConfig({
       clean: true,
       prettier: true,
       override: {
+        query: {
+          useQuery: true,
+          useMutation: true,
+          version: 5, // <--- THÊM DÒNG NÀY ĐỂ SINH CODE CHUẨN V5
+        },
         fetch: {
           includeHttpResponseReturnType: false,
         },
