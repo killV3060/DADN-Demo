@@ -28,8 +28,8 @@ catalog:
 
 minimumReleaseAge: 1440
 
-
 onlyBuiltDependencies:
+  - '@serialport/bindings-cpp'
   - '@swc/core'
   - esbuild
   - msw

@@ -30,17 +30,28 @@ cd <repo-folder>
 pnpm install
 ```
 
-### 3. Chạy Backend (API Server)
+### 3. Cấu hình biến môi trường chung (.env)
+
+Tạo file `.env` ở thư mục gốc project với nội dung:
+
+```bash
+API_PORT=8080
+WEB_PORT=5173
+BASE_PATH=/
+DATABASE_URL=postgres://postgres:password@localhost:5432/yolobit_db
+```
+
+### 4. Chạy Backend (API Server)
 
 Mở terminal **thứ nhất**, chạy:
 
 ```bash
-PORT=8080 pnpm --filter @workspace/api-server run dev
+pnpm --filter @workspace/api-server run dev
 ```
 
 > Server sẽ khởi động tại `http://localhost:8080`
 
-### 4. Chạy Frontend (Dashboard)
+### 5. Chạy Frontend (Dashboard)
 
 Mở terminal **thứ hai**, chạy:
 

@@ -1,18 +1,22 @@
+import path from "node:path";
+import { config as loadEnv } from "dotenv";
 import app from "./app";
 import { logger } from "./lib/logger";
 
-const rawPort = process.env["PORT"];
+loadEnv({ path: path.resolve(import.meta.dirname, "..", "..", "..", ".env") });
+
+const rawPort = process.env["API_PORT"] ?? process.env["PORT"];
 
 if (!rawPort) {
   throw new Error(
-    "PORT environment variable is required but was not provided.",
+    "API_PORT environment variable is required but was not provided.",
   );
 }
 
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
+  throw new Error(`Invalid API_PORT value: "${rawPort}"`);
 }
 
 app.listen(port, () => {
