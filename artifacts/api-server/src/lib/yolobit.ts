@@ -26,6 +26,7 @@ let connectedPort: string | null = null;
 let connectionMode: string | null = null;
 let demoInterval: ReturnType<typeof setInterval> | null = null;
 let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+const intentionalClosePorts = new WeakSet<SerialPort>();
 
 // Parse Yolobit data format: !1:T:xx#!1:H:yy#!1:L:zz#
 function parseYolobitData(raw: string): void {
@@ -57,6 +58,15 @@ export async function connectSerial(portPath: string): Promise<void> {
 
     sp.open((err) => {
       if (err) {
+        const lower = err.message.toLowerCase();
+        if (lower.includes("access denied") || lower.includes("permission")) {
+          reject(
+            new Error(
+              `Cannot open port ${portPath}: ${err.message}. Port may be busy (Serial Monitor/another app is using it).`
+            )
+          );
+          return;
+        }
         reject(new Error(`Cannot open port ${portPath}: ${err.message}`));
         return;
       }
@@ -77,6 +87,12 @@ export async function connectSerial(portPath: string): Promise<void> {
       });
 
       sp.on("close", () => {
+        if (intentionalClosePorts.has(sp)) {
+          intentionalClosePorts.delete(sp);
+          logger.info({ portPath }, "Serial port closed intentionally");
+          return;
+        }
+
         logger.warn("Serial port closed, attempting reconnect...");
         port = null;
         // Auto-reconnect after 3 seconds
@@ -145,6 +161,7 @@ export async function disconnect(): Promise<void> {
   }
   if (port && port.isOpen) {
     return new Promise((resolve) => {
+      intentionalClosePorts.add(port!);
       port!.close(() => {
         port = null;
         connectedPort = null;
