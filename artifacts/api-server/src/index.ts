@@ -1,9 +1,8 @@
-import path from "node:path";
 import { config as loadEnv } from "dotenv";
 import app from "./app";
 import { logger } from "./lib/logger";
 
-loadEnv({ path: path.resolve(import.meta.dirname, "..", "..", "..", ".env") });
+loadEnv();
 
 const rawPort = process.env["API_PORT"] ?? process.env["PORT"];
 

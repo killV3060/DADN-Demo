@@ -6,5 +6,55 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: yolobit_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d yolobit_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api-server:
+    build:
+      context: .
+      dockerfile: artifacts/api-server/Dockerfile
+    restart: unless-stopped
+    environment:
+      API_PORT: 8080
+      PORT: 8080
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:8080/api/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "8080:8080"
+
+  iot-dashboard:
+    build:
+      context: .
+      dockerfile: artifacts/iot-dashboard/Dockerfile
+      args:
+        WEB_PORT: 5173
+        BASE_PATH: /
+        API_PORT: 8080
+    restart: unless-stopped
+    depends_on:
+      api-server:
+        condition: service_healthy
+    ports:
+      - "5173:80"
+
+volumes:
+  postgres_data:

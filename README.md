@@ -63,6 +63,28 @@ pnpm --filter @workspace/iot-dashboard run dev
 
 ---
 
+## Cách build và chạy app bằng Docker
+### 1. Cài đặt Docker Desktop (khuyên dùng) hoặc Docker Engine
+
+Truy cập `https://docs.docker.com/desktop/` để tải và cài đặt Docker Desktop.\
+Sau đó khởi động Docker Desktop để ứng dụng chạy dưới nền
+
+### 2. Build app
+
+Dùng terminal để truy cập vào thư mục dự án
+
+```bash
+cd <repo-folder>
+```
+
+Sau đó tiến hành build app bằng lệnh:
+
+```bash
+docker compose up
+```
+
+> Sau khi build xong, Dashboard sẽ được mở tại `http://localhost:5173`
+
 ## Kết nối Yolobit qua USB (COM3)
 
 ### Bước 1 — Cài driver CH340

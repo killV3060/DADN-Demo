@@ -1,10 +1,9 @@
-import path from "node:path";
 import { config as loadEnv } from "dotenv";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "./schema";
 
-loadEnv({ path: path.resolve(import.meta.dirname, "..", "..", "..", ".env") });
+loadEnv();
 
 const { Pool } = pg;
 
