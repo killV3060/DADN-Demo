@@ -1,6 +1,13 @@
 // yolobit.ts - Model: handles Yolobit device connection and data parsing
 import { SerialPort } from "serialport";
 import { logger } from "./logger";
+import { saveCommandLog, saveSensorReading } from "./db";
+import {
+  hasMqttConnection,
+  publishCommand,
+  publishSensorPayload,
+  type SensorTopicPayload,
+} from "./mqtt";
 
 // Sensor data state (in-memory, updated by serial reader)
 interface SensorState {
@@ -28,6 +35,46 @@ let demoInterval: ReturnType<typeof setInterval> | null = null;
 let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 const intentionalClosePorts = new WeakSet<SerialPort>();
 
+function toSensorPayload(source: "serial" | "demo" | "mqtt"): SensorTopicPayload {
+  return {
+    temperature: state.temperature,
+    humidity: state.humidity,
+    luminosity: state.luminosity,
+    timestamp: state.timestamp ?? new Date().toISOString(),
+    source,
+  };
+}
+
+async function persistSensor(source: "serial" | "demo" | "mqtt"): Promise<void> {
+  const payload = toSensorPayload(source);
+  await saveSensorReading({
+    source,
+    temperature: payload.temperature ?? null,
+    humidity: payload.humidity ?? null,
+    luminosity: payload.luminosity ?? null,
+    timestamp: payload.timestamp,
+    rawPayload: payload as Record<string, unknown>,
+  });
+}
+
+async function onSensorUpdated(source: "serial" | "demo"): Promise<void> {
+  const payload = toSensorPayload(source);
+
+  try {
+    await persistSensor(source);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown DB error";
+    logger.warn({ err: message }, "Could not persist sensor data");
+  }
+
+  try {
+    await publishSensorPayload(payload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown MQTT error";
+    logger.warn({ err: message }, "Could not publish sensor payload");
+  }
+}
+
 // Parse Yolobit data format: !1:T:xx#!1:H:yy#!1:L:zz#
 function parseYolobitData(raw: string): void {
   const tempMatch = raw.match(/!1:T:([\d.]+)#/);
@@ -41,7 +88,36 @@ function parseYolobitData(raw: string): void {
   if (tempMatch || humidMatch || lumiMatch) {
     state.timestamp = new Date().toISOString();
     logger.debug({ temp: state.temperature, humid: state.humidity, lumi: state.luminosity }, "Sensor data updated");
+    void onSensorUpdated("serial");
   }
+}
+
+export function applyMqttSensorData(payload: SensorTopicPayload): void {
+  const hasValue =
+    typeof payload.temperature === "number" ||
+    typeof payload.humidity === "number" ||
+    typeof payload.luminosity === "number";
+
+  if (!hasValue) {
+    return;
+  }
+
+  if (typeof payload.temperature === "number") {
+    state.temperature = payload.temperature;
+  }
+  if (typeof payload.humidity === "number") {
+    state.humidity = payload.humidity;
+  }
+  if (typeof payload.luminosity === "number") {
+    state.luminosity = payload.luminosity;
+  }
+
+  state.timestamp = payload.timestamp ?? new Date().toISOString();
+
+  void persistSensor("mqtt").catch((error) => {
+    const message = error instanceof Error ? error.message : "Unknown DB error";
+    logger.warn({ err: message }, "Could not persist MQTT sensor payload");
+  });
 }
 
 // Connect to device via serial port (USB)
@@ -144,6 +220,7 @@ export async function startDemoMode(): Promise<void> {
     state.humidity = h;
     state.luminosity = l;
     state.timestamp = new Date().toISOString();
+    void onSensorUpdated("demo");
   }, 1000);
 
   logger.info("Demo mode started");
@@ -177,17 +254,66 @@ export async function disconnect(): Promise<void> {
 
 // Send a command to the device (1-10 as a string)
 export async function sendCommand(cmd: string): Promise<void> {
+  let publishedToMqtt = false;
+
+  try {
+    await publishCommand(cmd);
+    publishedToMqtt = hasMqttConnection();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown MQTT error";
+    logger.warn({ cmd, err: message }, "MQTT publish failed");
+  }
+
   if (connectionMode === "demo") {
     logger.info({ cmd }, "Demo mode: command simulated");
+    await saveCommandLog({
+      command: cmd,
+      source: "dashboard",
+      status: publishedToMqtt ? "published" : "accepted",
+      detail: "Demo mode command",
+    });
     return;
   }
+
   if (!port || !port.isOpen) {
+    if (publishedToMqtt) {
+      logger.info({ cmd }, "Command published to MQTT while serial is disconnected");
+      await saveCommandLog({
+        command: cmd,
+        source: "dashboard",
+        status: "published",
+        detail: "Published to MQTT only",
+      });
+      return;
+    }
+    await saveCommandLog({
+      command: cmd,
+      source: "dashboard",
+      status: "failed",
+      detail: "Device not connected",
+    });
     throw new Error("Device not connected");
   }
+
   return new Promise((resolve, reject) => {
     port!.write(cmd, (err) => {
-      if (err) reject(new Error(`Write error: ${err.message}`));
-      else resolve();
+      if (err) {
+        void saveCommandLog({
+          command: cmd,
+          source: "serial",
+          status: "failed",
+          detail: err.message,
+        });
+        reject(new Error(`Write error: ${err.message}`));
+      } else {
+        void saveCommandLog({
+          command: cmd,
+          source: "serial",
+          status: publishedToMqtt ? "published" : "accepted",
+          detail: publishedToMqtt ? "Serial + MQTT" : "Serial only",
+        });
+        resolve();
+      }
     });
   });
 }

@@ -1,8 +1,14 @@
 import { config as loadEnv } from "dotenv";
 import app from "./app";
 import { logger } from "./lib/logger";
+import { initMqttClient } from "./lib/mqtt";
+import { applyMqttSensorData } from "./lib/yolobit";
 
 loadEnv();
+
+initMqttClient({
+  onSensorMessage: applyMqttSensorData,
+});
 
 const rawPort = process.env["API_PORT"] ?? process.env["PORT"];
 

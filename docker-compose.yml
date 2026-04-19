@@ -1,6 +1,14 @@
-version: "3.8"
-
 services:
+  mqtt:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./artifacts/mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+
   db:
     image: postgres:15
     restart: always
@@ -28,7 +36,12 @@ services:
       PORT: 8080
       NODE_ENV: production
       DATABASE_URL: postgres://postgres:password@db:5432/yolobit_db
+      MQTT_URL: mqtt://mqtt:1883
+      MQTT_SENSOR_TOPIC: yolobit/sensor
+      MQTT_COMMAND_TOPIC: yolobit/command
     depends_on:
+      mqtt:
+        condition: service_started
       db:
         condition: service_healthy
     ports:
@@ -50,3 +63,5 @@ services:
 
 volumes:
   postgres_data:
+  mosquitto_data:
+  mosquitto_log:

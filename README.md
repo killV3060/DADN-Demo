@@ -39,6 +39,9 @@ API_PORT=8080
 WEB_PORT=5173
 BASE_PATH=/
 DATABASE_URL=postgres://postgres:password@localhost:5432/yolobit_db
+MQTT_URL=mqtt://localhost:1883
+MQTT_SENSOR_TOPIC=yolobit/sensor
+MQTT_COMMAND_TOPIC=yolobit/command
 ```
 
 ### 4. Chạy Backend (API Server)
@@ -212,12 +215,20 @@ Yolobit Board
 | Method | Endpoint | Mô tả |
 |---|---|---|
 | GET | `/api/data` | Dữ liệu cảm biến mới nhất |
+| GET | `/api/data/history?limit=100` | Lịch sử dữ liệu cảm biến từ PostgreSQL |
 | POST | `/api/control` | Gửi lệnh điều khiển (1–10) |
 | GET | `/api/thresholds` | Lấy ngưỡng cảnh báo |
 | POST | `/api/thresholds` | Cập nhật ngưỡng |
 | GET | `/api/connection` | Trạng thái kết nối |
 | POST | `/api/connection` | Kết nối cổng COM hoặc demo |
 | GET | `/api/ports` | Danh sách cổng COM có sẵn |
+
+## MQTT pub/sub
+
+- Broker mặc định khi chạy Docker nằm tại `mqtt://localhost:1883`
+- Thiết bị publish dữ liệu cảm biến lên topic `yolobit/sensor`
+- Dashboard/API publish lệnh điều khiển lên topic `yolobit/command`
+- API server sẽ subscribe topic sensor để nhận dữ liệu từ thiết bị từ xa và lưu vào PostgreSQL
 
 ## Bảng lệnh điều khiển
 

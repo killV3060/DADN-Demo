@@ -23,6 +23,7 @@ import {
   disconnect,
   getAvailablePorts,
 } from "../lib/yolobit";
+import { getRecentSensorReadings } from "../lib/db";
 
 const router: IRouter = Router();
 
@@ -30,6 +31,21 @@ const router: IRouter = Router();
 router.get("/data", async (req, res): Promise<void> => {
   const data = getSensorData();
   res.json(GetSensorDataResponse.parse(data));
+});
+
+// GET /api/data/history?limit=100 - returns recent readings from PostgreSQL
+router.get("/data/history", async (req, res): Promise<void> => {
+  const parsedLimit = Number(req.query["limit"] ?? 100);
+  const limit = Number.isNaN(parsedLimit) ? 100 : parsedLimit;
+
+  try {
+    const rows = await getRecentSensorReadings(limit);
+    res.json({ items: rows });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    req.log.error({ err: msg }, "Could not fetch sensor history");
+    res.status(500).json({ error: "Could not fetch sensor history" });
+  }
 });
 
 // POST /api/control - send command to Yolobit (1-10)
