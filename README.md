@@ -86,7 +86,7 @@ Sau đó tiến hành build app bằng lệnh:
 docker compose up
 ```
 
-> Sau khi build xong, Dashboard sẽ được mở tại `http://localhost:5173`
+> Sau khi build xong, Dashboard sẽ được mở tại `http://localhost:80`
 
 ## Kết nối Yolobit qua USB (COM3)
 

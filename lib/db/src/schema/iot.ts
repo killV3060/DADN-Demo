@@ -1,3 +1,9 @@
+/**
+ * Định nghĩa schema cho các bảng liên quan đến IoT, bao gồm bảng lưu trữ dữ liệu cảm biến và bảng lưu trữ log lệnh điều khiển.
+ * Sử dụng Drizzle ORM để định nghĩa cấu trúc bảng và Drizzle Zod để tạo schema cho việc insert và select dữ liệu.
+ * Các bảng này sẽ được sử dụng để lưu trữ dữ liệu cảm biến nhận được từ thiết bị Yolobit, cũng như log các lệnh điều khiển được gửi đến thiết bị.
+ */
+
 import { pgTable, serial, numeric, timestamp, varchar, text, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";

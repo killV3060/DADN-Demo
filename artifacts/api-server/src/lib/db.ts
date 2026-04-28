@@ -1,3 +1,8 @@
+/**
+ * Các interface dùng để lưu trữ và truy vấn dữ liệu cảm biến, lệnh điều khiển, và các log liên quan.
+ * Các hàm dùng để lưu trữ dữ liệu vào cơ sở dữ liệu và truy xuất dữ liệu gần đây nhất.
+ */
+
 import { db } from "@workspace/db";
 import { commandLogsTable, sensorReadingsTable } from "@workspace/db/schema";
 import { desc } from "drizzle-orm";
