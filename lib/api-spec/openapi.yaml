@@ -1,24 +1,25 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: IoT Dashboard API for Yolobit device
+  version: 0.2.0
+  description: IoT Dashboard API with RBAC
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
   - name: iot
     description: IoT sensor data and device control
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -27,15 +28,65 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
+  # ─── AUTH ────────────────────────────────────────────────────────
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with username + password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── IOT ─────────────────────────────────────────────────────────
   /data:
     get:
       operationId: getSensorData
       tags: [iot]
       summary: Get sensor data
-      description: Returns the latest sensor readings from Yolobit
+      description: >
+        Guest (no token): returns only temperature + humidity (luminosity is null).
+        Admin / Developer: returns full sensor data including luminosity.
       responses:
         "200":
-          description: Latest sensor data
+          description: Sensor data
           content:
             application/json:
               schema:
@@ -45,8 +96,9 @@ paths:
     post:
       operationId: sendCommand
       tags: [iot]
-      summary: Send control command
-      description: Send a command to the Yolobit device (1-10)
+      summary: Send control command (Admin+)
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -60,8 +112,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CommandResult"
-        "400":
-          description: Invalid command
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient role
           content:
             application/json:
               schema:
@@ -71,8 +129,9 @@ paths:
     get:
       operationId: getThresholds
       tags: [iot]
-      summary: Get alert thresholds
-      description: Returns current temperature max and humidity min thresholds
+      summary: Get alert thresholds (Admin+)
+      security:
+        - bearerAuth: []
       responses:
         "200":
           description: Current thresholds
@@ -80,11 +139,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Thresholds"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       operationId: setThresholds
       tags: [iot]
-      summary: Set alert thresholds
-      description: Update temperature max and humidity min thresholds
+      summary: Update alert thresholds (Developer only)
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -98,13 +164,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Thresholds"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /connection:
     get:
       operationId: getConnectionStatus
       tags: [iot]
-      summary: Get connection status
-      description: Returns whether device is connected and connection details
+      summary: Get connection status (Admin+)
+      security:
+        - bearerAuth: []
       responses:
         "200":
           description: Connection status
@@ -112,11 +191,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConnectionStatus"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       operationId: connectDevice
       tags: [iot]
-      summary: Connect to device
-      description: Connect to Yolobit via serial port
+      summary: Connect to device (Admin+)
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -136,13 +222,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /ports:
     get:
       operationId: listSerialPorts
       tags: [iot]
-      summary: List available serial ports
-      description: Returns list of available COM/serial ports
+      summary: List available serial ports (Admin+)
+      security:
+        - bearerAuth: []
       responses:
         "200":
           description: Available ports
@@ -150,17 +243,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PortList"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     HealthStatus:
       type: object
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    # ─── AUTH SCHEMAS ─────────────────────────────────────────────
+    LoginBody:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required: [username, password]
+
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        role:
+          type: string
+          enum: [admin, developer]
+      required: [id, username, role]
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/AuthUser"
+      required: [token, user]
+
+    # ─── IOT SCHEMAS ──────────────────────────────────────────────
     SensorData:
       type: object
       properties:
@@ -179,24 +315,15 @@ components:
               type: boolean
             humidityLow:
               type: boolean
-          required:
-            - temperatureHigh
-            - humidityLow
-      required:
-        - temperature
-        - humidity
-        - luminosity
-        - timestamp
-        - warnings
+          required: [temperatureHigh, humidityLow]
+      required: [temperature, humidity, luminosity, timestamp, warnings]
 
     ControlCommand:
       type: object
       properties:
         command:
           type: string
-          description: Command code (1-10 or threshold like 0000029 / 000000060)
-      required:
-        - command
+      required: [command]
 
     CommandResult:
       type: object
@@ -205,22 +332,16 @@ components:
           type: boolean
         message:
           type: string
-      required:
-        - success
-        - message
+      required: [success, message]
 
     Thresholds:
       type: object
       properties:
         tempMax:
           type: number
-          description: Maximum temperature threshold (Celsius)
         humidMin:
           type: number
-          description: Minimum humidity threshold (%)
-      required:
-        - tempMax
-        - humidMin
+      required: [tempMax, humidMin]
 
     ConnectionStatus:
       type: object
@@ -231,20 +352,14 @@ components:
           type: ["string", "null"]
         mode:
           type: ["string", "null"]
-          description: "serial or demo"
-      required:
-        - connected
-        - port
-        - mode
+      required: [connected, port, mode]
 
     ConnectRequest:
       type: object
       properties:
         port:
           type: string
-          description: Serial port path (e.g. COM3, /dev/ttyUSB0) or "demo" for demo mode
-      required:
-        - port
+      required: [port]
 
     PortList:
       type: object
@@ -253,13 +368,11 @@ components:
           type: array
           items:
             type: string
-      required:
-        - ports
+      required: [ports]
 
     ErrorResponse:
       type: object
       properties:
         error:
           type: string
-      required:
-        - error
+      required: [error]

@@ -5,7 +5,7 @@ import { useGetThresholds, useSetThresholds } from "@workspace/api-client-react"
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
-export function ThresholdSettings() {
+export function ThresholdSettings({ readOnly = false }: { readOnly?: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [tempMax, setTempMax] = useState<string>("35");
@@ -68,7 +68,9 @@ export function ThresholdSettings() {
         </div>
         <div>
           <h2 className="font-display text-xl font-semibold">Alert Thresholds</h2>
-          <p className="text-xs text-muted-foreground mt-1">Configure when warnings trigger</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {readOnly ? "Current alert thresholds (view only)" : "Configure when warnings trigger"}
+          </p>
         </div>
       </div>
 
@@ -82,8 +84,9 @@ export function ThresholdSettings() {
             type="number"
             value={tempMax}
             onChange={(e) => setTempMax(e.target.value)}
-            disabled={isLoading || isPending}
-            className="w-full bg-background/50 border border-border/50 text-foreground rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary block p-3 font-mono text-lg transition-all"
+            disabled={isLoading || isPending || readOnly}
+            readOnly={readOnly}
+            className="w-full bg-background/50 border border-border/50 text-foreground rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary block p-3 font-mono text-lg transition-all disabled:opacity-70 disabled:cursor-default"
             placeholder="e.g. 35"
           />
         </div>
@@ -97,20 +100,27 @@ export function ThresholdSettings() {
             type="number"
             value={humidMin}
             onChange={(e) => setHumidMin(e.target.value)}
-            disabled={isLoading || isPending}
-            className="w-full bg-background/50 border border-border/50 text-foreground rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary block p-3 font-mono text-lg transition-all"
+            disabled={isLoading || isPending || readOnly}
+            readOnly={readOnly}
+            className="w-full bg-background/50 border border-border/50 text-foreground rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary block p-3 font-mono text-lg transition-all disabled:opacity-70 disabled:cursor-default"
             placeholder="e.g. 40"
           />
         </div>
 
-        <button
-          onClick={handleSave}
-          disabled={isLoading || isPending}
-          className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border/50 transition-all duration-200 active:scale-[0.98]"
-        >
-          <Save className="w-4 h-4" />
-          {isPending ? "Saving..." : "Save Configuration"}
-        </button>
+        {readOnly ? (
+          <p className="text-xs text-muted-foreground text-center pt-2 border-t border-border/30">
+            Developer role required to edit thresholds
+          </p>
+        ) : (
+          <button
+            onClick={handleSave}
+            disabled={isLoading || isPending}
+            className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border/50 transition-all duration-200 active:scale-[0.98]"
+          >
+            <Save className="w-4 h-4" />
+            {isPending ? "Saving..." : "Save Configuration"}
+          </button>
+        )}
       </div>
     </GlassCard>
   );

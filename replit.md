@@ -11,6 +11,15 @@ pnpm workspace monorepo using TypeScript. IoT Dashboard for Yolobit sensor devic
 - Alert threshold configuration
 - Serial port connection (USB) + Demo mode for testing without hardware
 - Auto-reconnect on serial disconnect
+- **RBAC authentication** — JWT-based with 3 roles:
+  - **Guest** (no token): temperature + humidity only; no device controls
+  - **Admin**: full sensors (incl. luminosity) + connection + device controls + thresholds (read-only)
+  - **Developer**: all Admin + can edit thresholds via POST /api/thresholds
+
+## Default Credentials (seeded)
+- `admin` / `admin123` → role: admin
+- `developer` / `dev123` → role: developer
+- Re-seed anytime: `pnpm --filter @workspace/scripts run seed-users`
 
 ## Stack
 
@@ -93,7 +102,9 @@ Run codegen: `pnpm --filter @workspace/api-spec run codegen`
 
 ### `lib/api-zod` (`@workspace/api-zod`)
 
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
+Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`, `LoginBody`, `LoginResponse`). Used by `api-server` for request/response validation.
+
+**Note**: `src/index.ts` only re-exports `./generated/api` (Zod schemas). The `./generated/types` folder (raw TS interfaces) is intentionally excluded to avoid naming conflicts — Zod schemas serve both validation and type-inference purposes.
 
 ### `lib/api-client-react` (`@workspace/api-client-react`)
 
