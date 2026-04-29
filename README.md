@@ -57,8 +57,7 @@ React dashboard with role-based access control.
 │   ├── api-client-react/Generated React Query hooks
 │   └── db/              Drizzle ORM schema + client
 ├── scripts/             One-off scripts (seed-users, etc.)
-├── device/              MicroPython firmware (device.py)
-└── replit.md            Project memory for the AI agent
+└── device/              MicroPython firmware (device.py)
 ```
 
 ---
@@ -104,16 +103,16 @@ client and server in sync.
 
 ### Supported commands
 
-| Command   | Effect                  |
-| --------- | ----------------------- |
-| `"1"`     | Servo to 0° (open)      |
-| `"2"`     | Servo to 180° (close)   |
-| `"3"`     | LED on                  |
-| `"4"`     | LED off                 |
-| `"FAN:0"` | Fan off                 |
-| `"FAN:33"`| Fan 33 %                |
-| `"FAN:66"`| Fan 66 %                |
-| `"FAN:100"`| Fan 100 %              |
+| Command    | Effect                  |
+| ---------  | ----------------------- |
+| `"1"`      | Servo to 0° (open)      |
+| `"2"`      | Servo to 180° (close)   |
+| `"3"`      | LED on                  |
+| `"4"`      | LED off                 |
+| `"FAN:0"`  | Fan off                 |
+| `"FAN:33"` | Fan 33 %                |
+| `"FAN:66"` | Fan 66 %                |
+| `"FAN:100"`| Fan 100 %               |
 
 Set `MQTT_URL` to enable real hardware. When `MQTT_URL` is unset the API still
 runs (in `demo` mode) so the dashboard can be developed without a device.
@@ -127,7 +126,7 @@ runs (in `demo` mode) so the dashboard can be developed without a device.
 | Variable             | Default                              | Required  | Notes                                              |
 | -------------------- | ------------------------------------ | --------- | -------------------------------------------------- |
 | `API_PORT`           | `8080`                               | no        | HTTP port                                          |
-| `DATABASE_URL`       | _auto-provisioned on Replit_         | **yes**   | PostgreSQL connection string                       |
+| `DATABASE_URL`       |                                      | **yes**   | PostgreSQL connection string                       |
 | `JWT_SECRET`         | `dev-secret-change-in-production`    | **yes** in prod | HMAC secret for JWT signing                  |
 | `MQTT_URL`           | —                                    | no        | e.g. `mqtt://34.1.136.26:1883`. If empty → demo    |
 | `MQTT_SENSOR_TOPIC`  | `yolobit/sensor/+`                   | no        | Wildcard subscription                              |
@@ -144,15 +143,15 @@ runs (in `demo` mode) so the dashboard can be developed without a device.
 
 ---
 
-## How to Run (Replit)
+## How to Run
 
-Everything is pre-wired in the Replit workspace:
+Everything is pre-wired in the workspace:
 
 1. **Install dependencies** (already done on first boot):
    ```bash
    pnpm install
    ```
-2. **Provision the database** — Replit auto-creates a Postgres instance and
+2. **Provision the database** — auto-creates a Postgres instance and
    exports `DATABASE_URL`.
 3. **Push the schema**:
    ```bash
@@ -162,7 +161,7 @@ Everything is pre-wired in the Replit workspace:
    ```bash
    pnpm --filter @workspace/scripts run seed-users
    ```
-5. **Start the workflows** (Replit does this for you):
+5. **Start the workflows**:
    - `artifacts/api-server: API Server` → `http://localhost:8080`
    - `artifacts/iot-dashboard: web`     → `http://localhost:23411`
 
@@ -329,7 +328,7 @@ Behaviour:
   artifact configuration.
 - **`MQTT_URL is not set. MQTT pub/sub is disabled.`** — expected when no
   broker is configured; the API falls back to demo data.
-- **`DATABASE_URL, ensure the database is provisioned`** — on Replit, run
+- **`DATABASE_URL, ensure the database is provisioned`** — run
   `create_database` from the Tools panel; locally, set `DATABASE_URL` yourself.
 - **401 from `/api/control`** — log in first via `POST /api/auth/login` and
   include `Authorization: Bearer <token>` on subsequent requests.

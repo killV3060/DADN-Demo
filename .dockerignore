@@ -11,13 +11,9 @@
 .github
 .gitignore
 
-.replit
-.replit-artifact
 .local
 .config
 attached_assets/screenshots
-**/.replit-artifact
-**/.replit
 
 # logs
 *.log
