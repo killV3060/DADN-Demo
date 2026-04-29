@@ -71,12 +71,10 @@ export interface ConnectionStatus {
   mode: string | null;
 }
 
-export interface ConnectRequest {
-  port: string;
-}
+export type ConnectRequestMode = "demo" | "mqtt";
 
-export interface PortList {
-  ports: string[];
+export interface ConnectRequest {
+  mode: ConnectRequestMode;
 }
 
 export interface ErrorResponse {

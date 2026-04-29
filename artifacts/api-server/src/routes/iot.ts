@@ -1,4 +1,4 @@
-// iot.ts - Controller: IoT API with RBAC + MQTT-ready
+// iot.ts - Controller: IoT API with RBAC
 //
 // Role access:
 //   Guest (no token)  : GET /data (temp + humidity only)
@@ -16,7 +16,6 @@ import {
   GetConnectionStatusResponse,
   ConnectDeviceBody,
   ConnectDeviceResponse,
-  ListSerialPortsResponse,
 } from "@workspace/api-zod";
 
 import {
@@ -25,16 +24,12 @@ import {
   getThresholds,
   setThresholds,
   getConnectionStatus,
-  connectSerial,
+  connectMqtt,
   startDemoMode,
   disconnect,
-  getAvailablePorts,
 } from "../lib/yolobit";
 
-//  giữ DB history (từ dev)
 import { getRecentSensorReadings } from "../lib/db";
-
-//  giữ auth + RBAC (từ master)
 import { optionalAuth, requireAuth } from "../middlewares/auth";
 import { requireRole } from "../middlewares/rbac";
 
@@ -43,7 +38,7 @@ const router: IRouter = Router();
 
 // ───────────────────────────────────────────────────────────────
 // GET /api/data
-// Guest: chỉ thấy temp + humidity
+// Guest: only temp + humidity
 // Admin/Dev: full data
 // ───────────────────────────────────────────────────────────────
 router.get("/data", optionalAuth, async (req, res): Promise<void> => {
@@ -64,7 +59,7 @@ router.get("/data", optionalAuth, async (req, res): Promise<void> => {
 
 
 // ───────────────────────────────────────────────────────────────
-// GET /api/data/history (DB - từ dev)
+// GET /api/data/history (DB log)
 // ───────────────────────────────────────────────────────────────
 router.get("/data/history", requireAuth, requireRole("admin", "developer"), async (req, res): Promise<void> => {
   const parsedLimit = Number(req.query["limit"] ?? 100);
@@ -82,7 +77,8 @@ router.get("/data/history", requireAuth, requireRole("admin", "developer"), asyn
 
 
 // ───────────────────────────────────────────────────────────────
-// POST /api/control (MQTT command)
+// POST /api/control
+// Publishes command to MQTT topic yolobit/command/{deviceId}
 // Admin + Developer
 // ───────────────────────────────────────────────────────────────
 router.post(
@@ -97,9 +93,7 @@ router.post(
     }
 
     try {
-      //  MQTT hoặc abstraction phía dưới xử lý
       await sendCommand(parsed.data.command);
-
       res.json(
         SendCommandResponse.parse({
           success: true,
@@ -116,7 +110,7 @@ router.post(
 
 
 // ───────────────────────────────────────────────────────────────
-// GET thresholds (Admin+)
+// GET /api/thresholds (Admin+)
 // ───────────────────────────────────────────────────────────────
 router.get(
   "/thresholds",
@@ -129,7 +123,7 @@ router.get(
 
 
 // ───────────────────────────────────────────────────────────────
-// POST thresholds (Developer only)
+// POST /api/thresholds (Developer only)
 // ───────────────────────────────────────────────────────────────
 router.post(
   "/thresholds",
@@ -152,10 +146,8 @@ router.post(
 
 
 // ───────────────────────────────────────────────────────────────
-// CONNECTION (optional - nếu còn dùng phần này)
+// GET /api/connection (Admin+)
 // ───────────────────────────────────────────────────────────────
-
-// GET connection
 router.get(
   "/connection",
   requireAuth,
@@ -165,7 +157,11 @@ router.get(
   },
 );
 
-// POST connection
+
+// ───────────────────────────────────────────────────────────────
+// POST /api/connection { mode: "demo" | "mqtt" }
+// Admin+
+// ───────────────────────────────────────────────────────────────
 router.post(
   "/connection",
   requireAuth,
@@ -178,24 +174,25 @@ router.post(
     }
 
     try {
-      if (parsed.data.port === "demo") {
+      if (parsed.data.mode === "demo") {
         await startDemoMode();
       } else {
-        //  nếu chuyển full MQTT → có thể remove phần này sau
-        await connectSerial(parsed.data.port);
+        connectMqtt();
       }
 
       res.json(ConnectDeviceResponse.parse(getConnectionStatus()));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Unknown error";
-      req.log.error({ port: parsed.data.port, err: msg }, "Connection failed");
+      req.log.error({ mode: parsed.data.mode, err: msg }, "Connection failed");
       res.status(400).json({ error: msg });
     }
   },
 );
 
 
-// DELETE connection
+// ───────────────────────────────────────────────────────────────
+// DELETE /api/connection (Admin+)
+// ───────────────────────────────────────────────────────────────
 router.delete(
   "/connection",
   requireAuth,
@@ -203,18 +200,6 @@ router.delete(
   async (_req, res): Promise<void> => {
     await disconnect();
     res.json(GetConnectionStatusResponse.parse(getConnectionStatus()));
-  },
-);
-
-
-// GET ports
-router.get(
-  "/ports",
-  requireAuth,
-  requireRole("admin", "developer"),
-  async (_req, res): Promise<void> => {
-    const ports = await getAvailablePorts();
-    res.json(ListSerialPortsResponse.parse({ ports }));
   },
 );
 

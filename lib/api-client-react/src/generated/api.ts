@@ -31,7 +31,6 @@ import type {
   HealthStatus,
   LoginBody,
   LoginResponse,
-  PortList,
   SensorData,
   Thresholds,
 } from "./api.schemas";
@@ -662,13 +661,8 @@ export function useGetThresholds<
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 };
-/**
- * @summary Get alert thresholds (Admin+)
- */
-
 export function useGetThresholds<
   TData = Awaited<ReturnType<typeof getThresholds>>,
-<<<<<<< HEAD
   TError = ErrorType<unknown>,
 >(
   options?: {
@@ -681,17 +675,6 @@ export function useGetThresholds<
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>;
 } {
-=======
-  TError = ErrorType<ErrorResponse>,
->(options?: {
-  query?: UseQueryOptions<
-    Awaited<ReturnType<typeof getThresholds>>,
-    TError,
-    TData
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
->>>>>>> master
   const queryOptions = getGetThresholdsQueryOptions(options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<
@@ -1035,153 +1018,3 @@ export const useConnectDevice = <
   return useMutation(getConnectDeviceMutationOptions(options), queryClient);
 };
 
-/**
- * @summary List available serial ports (Admin+)
- */
-export const getListSerialPortsUrl = () => {
-  return `/api/ports`;
-};
-
-export const listSerialPorts = async (
-  options?: RequestInit,
-): Promise<PortList> => {
-  return customFetch<PortList>(getListSerialPortsUrl(), {
-    ...options,
-    method: "GET",
-  });
-};
-
-export const getListSerialPortsQueryKey = () => {
-  return [`/api/ports`] as const;
-};
-
-export const getListSerialPortsQueryOptions = <
-  TData = Awaited<ReturnType<typeof listSerialPorts>>,
-  TError = ErrorType<ErrorResponse>,
->(options?: {
-  query?: Partial<
-    UseQueryOptions<Awaited<ReturnType<typeof listSerialPorts>>, TError, TData>
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}) => {
-  const { query: queryOptions, request: requestOptions } = options ?? {};
-
-  const queryKey = queryOptions?.queryKey ?? getListSerialPortsQueryKey();
-
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof listSerialPorts>>> = ({
-    signal,
-  }) => listSerialPorts({ signal, ...requestOptions });
-
-  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof listSerialPorts>>,
-    TError,
-    TData
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-};
-
-export type ListSerialPortsQueryResult = NonNullable<
-  Awaited<ReturnType<typeof listSerialPorts>>
->;
-export type ListSerialPortsQueryError = ErrorType<ErrorResponse>;
-
-export function useListSerialPorts<
-  TData = Awaited<ReturnType<typeof listSerialPorts>>,
-  TError = ErrorType<unknown>,
->(
-  options: {
-    query: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof listSerialPorts>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listSerialPorts>>,
-          TError,
-          Awaited<ReturnType<typeof listSerialPorts>>
-        >,
-        "initialData"
-      >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): DefinedUseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useListSerialPorts<
-  TData = Awaited<ReturnType<typeof listSerialPorts>>,
-  TError = ErrorType<unknown>,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof listSerialPorts>>,
-        TError,
-        TData
-      >
-    > &
-      Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof listSerialPorts>>,
-          TError,
-          Awaited<ReturnType<typeof listSerialPorts>>
-        >,
-        "initialData"
-      >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-export function useListSerialPorts<
-  TData = Awaited<ReturnType<typeof listSerialPorts>>,
-  TError = ErrorType<unknown>,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof listSerialPorts>>,
-        TError,
-        TData
-      >
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-};
-/**
- * @summary List available serial ports (Admin+)
- */
-
-export function useListSerialPorts<
-  TData = Awaited<ReturnType<typeof listSerialPorts>>,
-  TError = ErrorType<unknown>,
->(
-  options?: {
-    query?: Partial<
-      UseQueryOptions<
-        Awaited<ReturnType<typeof listSerialPorts>>,
-        TError,
-        TData
-      >
-    >;
-    request?: SecondParameter<typeof customFetch>;
-  },
-  queryClient?: QueryClient,
-): UseQueryResult<TData, TError> & {
-  queryKey: DataTag<QueryKey, TData, TError>;
-} {
-  const queryOptions = getListSerialPortsQueryOptions(options);
-
-  const query = useQuery(queryOptions, queryClient) as UseQueryResult<
-    TData,
-    TError
-  > & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return { ...query, queryKey: queryOptions.queryKey };
-}

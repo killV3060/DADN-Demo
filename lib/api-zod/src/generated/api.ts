@@ -102,18 +102,11 @@ export const GetConnectionStatusResponse = zod.object({
  * @summary Connect to device (Admin+)
  */
 export const ConnectDeviceBody = zod.object({
-  port: zod.string(),
+  mode: zod.enum(["demo", "mqtt"]),
 });
 
 export const ConnectDeviceResponse = zod.object({
   connected: zod.boolean(),
   port: zod.string().nullable(),
   mode: zod.string().nullable(),
-});
-
-/**
- * @summary List available serial ports (Admin+)
- */
-export const ListSerialPortsResponse = zod.object({
-  ports: zod.array(zod.string()),
 });

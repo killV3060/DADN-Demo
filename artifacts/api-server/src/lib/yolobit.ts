@@ -1,5 +1,7 @@
-// yolobit.ts - Model: handles Yolobit device connection and data parsing
-import { SerialPort } from "serialport";
+// yolobit.ts - Model: handles Yolobit device state and command dispatch
+// v2: MQTT-only transport (no USB Serial). Data arrives via MQTT subscription
+// (see mqtt.ts). Demo mode generates simulated readings locally.
+
 import { logger } from "./logger";
 import { saveCommandLog, saveSensorReading } from "./db";
 import {
@@ -9,7 +11,8 @@ import {
   type SensorTopicPayload,
 } from "./mqtt";
 
-// Sensor data state (in-memory, updated by serial reader)
+const DEVICE_ID = process.env["DEVICE_ID"] ?? "1";
+
 interface SensorState {
   temperature: number | null;
   humidity: number | null;
@@ -28,14 +31,10 @@ const state: SensorState = {
   humidMin: 30,
 };
 
-let port: SerialPort | null = null;
-let connectedPort: string | null = null;
-let connectionMode: string | null = null;
+let connectionMode: "mqtt" | "demo" | null = null;
 let demoInterval: ReturnType<typeof setInterval> | null = null;
-let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
-const intentionalClosePorts = new WeakSet<SerialPort>();
 
-function toSensorPayload(source: "serial" | "demo" | "mqtt"): SensorTopicPayload {
+function toSensorPayload(source: "demo" | "mqtt"): SensorTopicPayload {
   return {
     temperature: state.temperature,
     humidity: state.humidity,
@@ -45,7 +44,7 @@ function toSensorPayload(source: "serial" | "demo" | "mqtt"): SensorTopicPayload
   };
 }
 
-async function persistSensor(source: "serial" | "demo" | "mqtt"): Promise<void> {
+async function persistSensor(source: "demo" | "mqtt"): Promise<void> {
   const payload = toSensorPayload(source);
   await saveSensorReading({
     source,
@@ -57,9 +56,7 @@ async function persistSensor(source: "serial" | "demo" | "mqtt"): Promise<void> 
   });
 }
 
-async function onSensorUpdated(source: "serial" | "demo"): Promise<void> {
-  const payload = toSensorPayload(source);
-
+async function onSensorUpdated(source: "demo" | "mqtt"): Promise<void> {
   try {
     await persistSensor(source);
   } catch (error) {
@@ -67,31 +64,17 @@ async function onSensorUpdated(source: "serial" | "demo"): Promise<void> {
     logger.warn({ err: message }, "Could not persist sensor data");
   }
 
-  try {
-    await publishSensorPayload(payload);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown MQTT error";
-    logger.warn({ err: message }, "Could not publish sensor payload");
+  if (source === "demo") {
+    try {
+      await publishSensorPayload(DEVICE_ID, toSensorPayload(source));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown MQTT error";
+      logger.warn({ err: message }, "Could not publish demo sensor payload");
+    }
   }
 }
 
-// Parse Yolobit data format: !1:T:xx#!1:H:yy#!1:L:zz#
-function parseYolobitData(raw: string): void {
-  const tempMatch = raw.match(/!1:T:([\d.]+)#/);
-  const humidMatch = raw.match(/!1:H:([\d.]+)#/);
-  const lumiMatch = raw.match(/!1:L:([\d.]+)#/);
-
-  if (tempMatch) state.temperature = parseFloat(tempMatch[1]);
-  if (humidMatch) state.humidity = parseFloat(humidMatch[1]);
-  if (lumiMatch) state.luminosity = parseFloat(lumiMatch[1]);
-
-  if (tempMatch || humidMatch || lumiMatch) {
-    state.timestamp = new Date().toISOString();
-    logger.debug({ temp: state.temperature, humid: state.humidity, lumi: state.luminosity }, "Sensor data updated");
-    void onSensorUpdated("serial");
-  }
-}
-
+// Called by mqtt.ts when a sensor message arrives on yolobit/sensor/+
 export function applyMqttSensorData(payload: SensorTopicPayload): void {
   const hasValue =
     typeof payload.temperature === "number" ||
@@ -102,17 +85,16 @@ export function applyMqttSensorData(payload: SensorTopicPayload): void {
     return;
   }
 
-  if (typeof payload.temperature === "number") {
-    state.temperature = payload.temperature;
-  }
-  if (typeof payload.humidity === "number") {
-    state.humidity = payload.humidity;
-  }
-  if (typeof payload.luminosity === "number") {
-    state.luminosity = payload.luminosity;
-  }
+  if (typeof payload.temperature === "number") state.temperature = payload.temperature;
+  if (typeof payload.humidity === "number") state.humidity = payload.humidity;
+  if (typeof payload.luminosity === "number") state.luminosity = payload.luminosity;
 
   state.timestamp = payload.timestamp ?? new Date().toISOString();
+
+  if (connectionMode === null) {
+    connectionMode = "mqtt";
+    logger.info("MQTT sensor data received — connection mode set to mqtt");
+  }
 
   void persistSensor("mqtt").catch((error) => {
     const message = error instanceof Error ? error.message : "Unknown DB error";
@@ -120,98 +102,39 @@ export function applyMqttSensorData(payload: SensorTopicPayload): void {
   });
 }
 
-// Connect to device via serial port (USB)
-export async function connectSerial(portPath: string): Promise<void> {
-  // Disconnect existing connection first
-  await disconnect();
-
-  return new Promise((resolve, reject) => {
-    const sp = new SerialPort({
-      path: portPath,
-      baudRate: 115200,
-      autoOpen: false,
-    });
-
-    sp.open((err) => {
-      if (err) {
-        const lower = err.message.toLowerCase();
-        if (lower.includes("access denied") || lower.includes("permission")) {
-          reject(
-            new Error(
-              `Cannot open port ${portPath}: ${err.message}. Port may be busy (Serial Monitor/another app is using it).`
-            )
-          );
-          return;
-        }
-        reject(new Error(`Cannot open port ${portPath}: ${err.message}`));
-        return;
-      }
-
-      port = sp;
-      connectedPort = portPath;
-      connectionMode = "serial";
-      logger.info({ portPath }, "Connected to Yolobit via serial");
-
-      let buffer = "";
-      sp.on("data", (data: Buffer) => {
-        buffer += data.toString();
-        // Parse complete packets (ends with #)
-        if (buffer.includes("#")) {
-          parseYolobitData(buffer);
-          buffer = "";
-        }
-      });
-
-      sp.on("close", () => {
-        if (intentionalClosePorts.has(sp)) {
-          intentionalClosePorts.delete(sp);
-          logger.info({ portPath }, "Serial port closed intentionally");
-          return;
-        }
-
-        logger.warn("Serial port closed, attempting reconnect...");
-        port = null;
-        // Auto-reconnect after 3 seconds
-        reconnectTimeout = setTimeout(() => {
-          connectSerial(portPath).catch((e) => {
-            logger.error({ err: e.message }, "Reconnect failed");
-          });
-        }, 3000);
-      });
-
-      sp.on("error", (e) => {
-        logger.error({ err: e.message }, "Serial port error");
-      });
-
-      resolve();
-    });
-  });
+// Switch to MQTT mode (real device data via broker subscription)
+export function connectMqtt(): void {
+  if (demoInterval) {
+    clearInterval(demoInterval);
+    demoInterval = null;
+  }
+  connectionMode = "mqtt";
+  logger.info({ deviceId: DEVICE_ID }, "Connection mode set to MQTT");
 }
 
-// Start demo mode with simulated data (async so connection status is set before response)
+// Start demo mode with simulated data
 export async function startDemoMode(): Promise<void> {
-  await disconnect();
+  if (demoInterval) {
+    clearInterval(demoInterval);
+    demoInterval = null;
+  }
 
   connectionMode = "demo";
-  connectedPort = "demo";
 
   let t = 28;
   let h = 55;
   let l = 60;
 
-  // Set initial values immediately
   state.temperature = t;
   state.humidity = h;
   state.luminosity = l;
   state.timestamp = new Date().toISOString();
 
   demoInterval = setInterval(() => {
-    // Simulate small fluctuations
     t = Math.round((t + (Math.random() - 0.5) * 2) * 10) / 10;
     h = Math.round((h + (Math.random() - 0.5) * 3) * 10) / 10;
     l = Math.round((l + (Math.random() - 0.5) * 10) * 10) / 10;
 
-    // Keep in realistic range
     t = Math.max(20, Math.min(45, t));
     h = Math.max(20, Math.min(90, h));
     l = Math.max(0, Math.min(100, l));
@@ -226,110 +149,61 @@ export async function startDemoMode(): Promise<void> {
   logger.info("Demo mode started");
 }
 
-// Disconnect from device
+// Disconnect (stop demo, revert to idle)
 export async function disconnect(): Promise<void> {
   if (demoInterval) {
     clearInterval(demoInterval);
     demoInterval = null;
   }
-  if (reconnectTimeout) {
-    clearTimeout(reconnectTimeout);
-    reconnectTimeout = null;
-  }
-  if (port && port.isOpen) {
-    return new Promise((resolve) => {
-      intentionalClosePorts.add(port!);
-      port!.close(() => {
-        port = null;
-        connectedPort = null;
-        connectionMode = null;
-        resolve();
-      });
-    });
-  }
-  port = null;
-  connectedPort = null;
   connectionMode = null;
+  logger.info("Disconnected");
 }
 
-// Send a command to the device (1-10 as a string)
-export async function sendCommand(cmd: string): Promise<void> {
-  let publishedToMqtt = false;
-
-  try {
-    await publishCommand(cmd);
-    publishedToMqtt = hasMqttConnection();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown MQTT error";
-    logger.warn({ cmd, err: message }, "MQTT publish failed");
-  }
-
-  if (connectionMode === "demo") {
-    logger.info({ cmd }, "Demo mode: command simulated");
-    await saveCommandLog({
-      command: cmd,
-      source: "dashboard",
-      status: publishedToMqtt ? "published" : "accepted",
-      detail: "Demo mode command",
-    });
-    return;
-  }
-
-  if (!port || !port.isOpen) {
-    if (publishedToMqtt) {
-      logger.info({ cmd }, "Command published to MQTT while serial is disconnected");
-      await saveCommandLog({
-        command: cmd,
-        source: "dashboard",
-        status: "published",
-        detail: "Published to MQTT only",
-      });
-      return;
-    }
-    await saveCommandLog({
-      command: cmd,
-      source: "dashboard",
-      status: "failed",
-      detail: "Device not connected",
-    });
-    throw new Error("Device not connected");
-  }
-
-  return new Promise((resolve, reject) => {
-    port!.write(cmd, (err) => {
-      if (err) {
-        void saveCommandLog({
-          command: cmd,
-          source: "serial",
-          status: "failed",
-          detail: err.message,
-        });
-        reject(new Error(`Write error: ${err.message}`));
-      } else {
-        void saveCommandLog({
-          command: cmd,
-          source: "serial",
-          status: publishedToMqtt ? "published" : "accepted",
-          detail: publishedToMqtt ? "Serial + MQTT" : "Serial only",
-        });
-        resolve();
-      }
-    });
+function logCommand(input: Parameters<typeof saveCommandLog>[0]): void {
+  saveCommandLog(input).catch((error) => {
+    const message = error instanceof Error ? error.message : "Unknown DB error";
+    logger.warn({ cmd: input.command, err: message }, "Could not persist command log");
   });
 }
 
-// Get available serial ports (gracefully handle environments without udevadm)
-export async function getAvailablePorts(): Promise<string[]> {
-  try {
-    const ports = await SerialPort.list();
-    return ports.map((p) => p.path);
-  } catch (e) {
-    logger.warn({ err: (e as Error).message }, "Could not enumerate serial ports");
-    return [];
+// Send a command to the device via MQTT
+export async function sendCommand(cmd: string): Promise<void> {
+  const mqttAvailable = hasMqttConnection();
+
+  if (connectionMode === "demo") {
+    logger.info({ cmd }, "Demo mode: command simulated");
+    logCommand({
+      command: cmd,
+      source: "dashboard",
+      status: mqttAvailable ? "published" : "accepted",
+      detail: mqttAvailable ? "Demo + MQTT published" : "Demo mode command",
+    });
+    if (mqttAvailable) {
+      await publishCommand(DEVICE_ID, cmd).catch(() => undefined);
+    }
+    return;
   }
+
+  if (!mqttAvailable) {
+    logCommand({
+      command: cmd,
+      source: "dashboard",
+      status: "failed",
+      detail: "MQTT not connected",
+    });
+    throw new Error("MQTT broker not connected");
+  }
+
+  await publishCommand(DEVICE_ID, cmd);
+  logCommand({
+    command: cmd,
+    source: "dashboard",
+    status: "published",
+    detail: `Published to yolobit/command/${DEVICE_ID}`,
+  });
 }
 
-// Get current sensor data with warning flags
+// Get current sensor data
 export function getSensorData() {
   return {
     temperature: state.temperature,
@@ -356,9 +230,10 @@ export function setThresholds(tempMax: number, humidMin: number) {
 
 // Get connection status
 export function getConnectionStatus() {
+  const brokerUrl = process.env["MQTT_URL"] ?? null;
   return {
     connected: connectionMode !== null,
-    port: connectedPort,
+    port: connectionMode === "mqtt" ? (brokerUrl ?? "mqtt") : connectionMode,
     mode: connectionMode,
   };
 }

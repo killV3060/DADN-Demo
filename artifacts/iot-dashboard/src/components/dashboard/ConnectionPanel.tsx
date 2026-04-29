@@ -1,126 +1,119 @@
-import { useState, useEffect } from "react";
-import { Link2, Link2Off, RefreshCw, Usb } from "lucide-react";
+import { Wifi, WifiOff, MonitorPlay } from "lucide-react";
 import { GlassCard } from "../ui/glass-card";
-import { 
-  useGetConnectionStatus, 
-  useListSerialPorts, 
-  useConnectDevice 
+import {
+  useGetConnectionStatus,
+  useConnectDevice,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 export function ConnectionPanel() {
-  const [selectedPort, setSelectedPort] = useState<string>("demo");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: status, isLoading: statusLoading } = useGetConnectionStatus({
-    query: { 
-      queryKey: ['sensor-data'],
-      refetchInterval: 5000 } // Poll status every 5s
+    query: {
+      refetchInterval: 5000,
+    },
   });
-
-  const { data: portsData, refetch: refetchPorts, isFetching: fetchingPorts } = useListSerialPorts();
 
   const { mutate: connect, isPending: isConnecting } = useConnectDevice({
     mutation: {
       onSuccess: (data) => {
         toast({
-          title: "Connection Status",
-          description: data.connected ? `Connected to ${data.port}` : "Disconnected",
-          variant: data.connected ? "default" : "destructive"
+          title: "Connection Updated",
+          description: data.connected
+            ? `Connected via ${data.mode} mode`
+            : "Disconnected",
+          variant: data.connected ? "default" : "destructive",
         });
-        queryClient.invalidateQueries({ queryKey: ["/api/connection"] });
+        void queryClient.invalidateQueries({ queryKey: ["/api/connection"] });
       },
       onError: (error) => {
         toast({
           variant: "destructive",
           title: "Connection Failed",
-          description: (error as any).error || "Unknown error occurred" //khá căng thẳng đoạn này tại chưa biết cấu hình error sao
+          description: (error as { error?: string }).error ?? "Unknown error occurred",
         });
-      }
-    }
+      },
+    },
   });
 
-  // Update selected port if currently connected
-  useEffect(() => {
-    if (status?.connected && status.port) {
-      setSelectedPort(status.port);
-    }
-  }, [status]);
+  const isConnected = status?.connected ?? false;
+  const currentMode = status?.mode ?? null;
 
-  const handleConnect = () => {
-    connect({ data: { port: selectedPort } });
+  const handleConnect = (mode: "demo" | "mqtt") => {
+    connect({ data: { mode } });
   };
 
-  const isConnected = status?.connected ?? false;
+  const ModeIcon = currentMode === "mqtt" ? Wifi : currentMode === "demo" ? MonitorPlay : WifiOff;
 
   return (
     <GlassCard className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
       <div className="flex items-center gap-4">
-        <div className={cn(
-          "w-12 h-12 rounded-2xl flex items-center justify-center border",
-          isConnected 
-            ? "bg-success/10 border-success/30 text-success shadow-[0_0_20px_-5px_rgba(var(--success),0.4)]" 
-            : "bg-muted border-border text-muted-foreground"
-        )}>
-          {isConnected ? <Link2 className="w-6 h-6" /> : <Link2Off className="w-6 h-6" />}
+        <div
+          className={cn(
+            "w-12 h-12 rounded-2xl flex items-center justify-center border",
+            isConnected
+              ? "bg-success/10 border-success/30 text-success shadow-[0_0_20px_-5px_rgba(var(--success),0.4)]"
+              : "bg-muted border-border text-muted-foreground",
+          )}
+        >
+          <ModeIcon className="w-6 h-6" />
         </div>
-        
+
         <div>
           <h3 className="font-display font-medium text-lg flex items-center gap-2">
             Device Status
-            <span className={cn(
-              "w-2 h-2 rounded-full",
-              isConnected ? "bg-success animate-pulse" : "bg-destructive"
-            )} />
+            <span
+              className={cn(
+                "w-2 h-2 rounded-full",
+                isConnected ? "bg-success animate-pulse" : "bg-destructive",
+              )}
+            />
           </h3>
           <p className="text-sm text-muted-foreground font-mono">
-            {statusLoading ? "Checking..." : (isConnected ? `Connected via ${status?.mode} mode` : "Offline")}
+            {statusLoading
+              ? "Checking..."
+              : isConnected
+                ? currentMode === "mqtt"
+                  ? `MQTT — ${status?.port ?? "broker"}`
+                  : "Demo Mode (simulated data)"
+                : "Offline"}
           </p>
         </div>
       </div>
 
       <div className="flex items-center gap-2 w-full sm:w-auto">
-        <div className="relative flex-1 sm:w-48">
-          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-muted-foreground">
-            <Usb className="w-4 h-4" />
-          </div>
-          <select 
-            value={selectedPort}
-            onChange={(e) => setSelectedPort(e.target.value)}
-            disabled={isConnected || isConnecting}
-            className="w-full bg-background/50 border border-border/50 text-foreground text-sm rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary block pl-10 p-2.5 appearance-none disabled:opacity-50"
-          >
-            <option value="demo">Demo Mode (Simulation)</option>
-            {portsData?.ports?.map(port => (
-              <option key={port} value={port}>{port}</option>
-            )) || null }
-          </select>
-        </div>
-        
         <button
-          onClick={() => refetchPorts()}
-          disabled={fetchingPorts || isConnected}
-          className="p-2.5 rounded-xl border border-border/50 bg-background/50 text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-50 transition-colors"
-          title="Refresh Ports"
+          onClick={() => handleConnect("demo")}
+          disabled={isConnecting || statusLoading || currentMode === "demo"}
+          className={cn(
+            "flex-1 sm:flex-none px-4 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 border",
+            currentMode === "demo"
+              ? "bg-primary/20 border-primary/50 text-primary"
+              : "bg-background/50 border-border/50 text-foreground hover:bg-accent",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+          )}
         >
-          <RefreshCw className={cn("w-4 h-4", fetchingPorts && "animate-spin")} />
+          <MonitorPlay className="w-4 h-4 inline-block mr-1.5 -mt-0.5" />
+          Demo
         </button>
 
         <button
-          onClick={handleConnect}
-          disabled={isConnecting || statusLoading}
+          onClick={() => handleConnect("mqtt")}
+          disabled={isConnecting || statusLoading || currentMode === "mqtt"}
           className={cn(
-            "px-6 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 border",
-            isConnected 
-              ? "bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20" 
+            "flex-1 sm:flex-none px-4 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 border",
+            currentMode === "mqtt"
+              ? "bg-success/10 border-success/30 text-success"
               : "bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5",
-            "disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            "disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none",
           )}
         >
-          {isConnecting ? "..." : (isConnected ? "Disconnect" : "Connect")}
+          <Wifi className="w-4 h-4 inline-block mr-1.5 -mt-0.5" />
+          {isConnecting ? "..." : "MQTT"}
         </button>
       </div>
     </GlassCard>
