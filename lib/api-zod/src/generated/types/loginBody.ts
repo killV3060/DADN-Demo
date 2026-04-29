@@ -6,7 +6,7 @@
  * OpenAPI spec version: 0.2.0
  */
 
-export interface CommandResult {
-  success: boolean;
-  message: string;
+export interface LoginBody {
+  username: string;
+  password: string;
 }

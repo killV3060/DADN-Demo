@@ -5,8 +5,9 @@
  * IoT Dashboard API with RBAC
  * OpenAPI spec version: 0.2.0
  */
+import type { AuthUser } from "./authUser";
 
-export interface CommandResult {
-  success: boolean;
-  message: string;
+export interface LoginResponse {
+  token: string;
+  user: AuthUser;
 }

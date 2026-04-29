@@ -1,0 +1,16 @@
+Yolobit Smart Home IoT DashboardA real-time IoT monitoring and control system for the Yolobit microcontroller. This project features a full-stack architecture that reads sensor data from physical hardware via Serial, stores configurations in PostgreSQL, and displays everything on a modern web dashboard.🚀 Quick Start (Local Setup)Follow these steps to get the project running on your Windows machine:Install pnpm (if not already installed):Bashnpm install -g pnpm
+Install Dependencies:Bashpnpm install
+Database Setup (PostgreSQL):Ensure PostgreSQL is running and you have created a database named yolobit_db.Configure your DATABASE_URL in the .env files.Push the schema to your database:Bashpnpm --filter @workspace/db run push
+Run Backend (API Server):Bashpnpm --filter @workspace/api-server run dev
+Run Frontend (IoT Dashboard):Bashpnpm --filter @workspace/iot-dashboard run dev
+🛠 Languages & TechnologiesLayerTechnologyWhyMicrocontrollerMicroPythonRuns natively on the Yolobit boardBackendTypeScript + Node.jsHandles USB serial communication and API logicDatabasePostgreSQL + Drizzle ORMStores sensor thresholds and historical settingsFrontendReact + TypeScriptProvides a responsive, type-safe UIBuild ToolViteLightning-fast development and bundlingStylingTailwind CSSModern "Dark-mode" IoT aestheticMonorepopnpm workspacesManages frontend, backend, and db as a single unit🏗 Architecture — MVC PatternĐoạn mãgraph TD
+    A[Yolobit Board] -- "USB Serial (115200 baud)" --> B
+    subgraph "Backend (API Server)"
+    B[MODEL: yolobit.ts] -- "Parses raw bytes" --> C[CONTROLLER: iot.ts]
+    C -- "Read/Write" --> D[(PostgreSQL)]
+    end
+    C -- "HTTP /api/data (1s polling)" --> E
+    subgraph "Frontend (React)"
+    E[VIEW: Dashboard UI]
+    end
+📡 How Data TravelsYolobit prints sensor data: Every few seconds, the board sends a string like: !1:T:28.5#!1:H:54.2#!1:L:61# via USB.Backend parsing: The server uses Regular Expressions to extract values:/!1:T:([\d.]+)#/ → Temperature: 28.5/!1:H:([\d.]+)#/ → Humidity: 54.2Frontend Polling: The React app calls GET /api/data every 1 second using React Query.Display & Alerts: React compares real-time data with Thresholds stored in the database. If temperature exceeds the limit, the UI triggers a red warning banner.Control Loop: When you click a button on the dashboard, it sends a POST /api/control. The backend writes a command (e.g., "5") back to the Serial port to trigger actuators on the Yolobit.🧪 Demo ModeIf you don't have the physical Yolobit hardware, you can enable Demo Mode by setting DEMO_MODE=true in your api-server/.env file. This will generate simulated random data so you can test the dashboard's features immediately.📝 Note on Environment VariablesEnsure your .env files contain the following:DATABASE_URL: postgres://username:password@localhost:5432/yolobit_dbPORT: 5000 (for backend)VITE_API_URL: http://localhost:5000/api (for frontend)
