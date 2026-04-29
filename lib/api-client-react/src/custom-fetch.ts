@@ -392,8 +392,9 @@ export async function customFetch<T = unknown>(
   }
 
   const requestInfo = { method, url: resolveUrl(input) };
+  const cache = init.cache ?? "no-store";
 
-  const response = await fetch(input, { ...init, method, headers });
+  const response = await fetch(input, { ...init, method, headers, cache });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
