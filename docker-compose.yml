@@ -1,67 +1,70 @@
 services:
-  mqtt:
-    image: eclipse-mosquitto:2
+  postgres:
+    image: postgres:16-alpine
+    container_name: yolobit-postgres
     restart: unless-stopped
-    ports:
-      - "1883:1883"
-    volumes:
-      - ./artifacts/mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - mosquitto_data:/mosquitto/data
-      - mosquitto_log:/mosquitto/log
-
-  db:
-    image: postgres:15
-    restart: always
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: yolobit_db
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d yolobit_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      POSTGRES_USER: yolobit
+      POSTGRES_PASSWORD: yolobit
+      POSTGRES_DB: yolobit
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yolobit -d yolobit"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: yolobit-mosquitto
+    restart: unless-stopped
+    volumes:
+      - ./artifacts/mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    ports:
+      - "1883:1883"
 
   api-server:
     build:
       context: .
-      dockerfile: artifacts/api-server/Dockerfile
+      dockerfile: docker/Dockerfile.api
+    container_name: yolobit-api
     restart: unless-stopped
-    environment:
-      API_PORT: 8080
-      PORT: 8080
-      NODE_ENV: production
-      DATABASE_URL: postgres://postgres:password@db:5432/yolobit_db
-      MQTT_URL: mqtt://mqtt:1883
-      MQTT_SENSOR_TOPIC: yolobit/sensor
-      MQTT_COMMAND_TOPIC: yolobit/command
     depends_on:
-      mqtt:
-        condition: service_started
-      db:
+      postgres:
         condition: service_healthy
+      mosquitto:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      API_PORT: "8080"
+      DATABASE_URL: postgres://yolobit:yolobit@postgres:5432/yolobit
+      PGHOST: postgres
+      PGPORT: "5432"
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      MQTT_URL: mqtt://mosquitto:1883
+      MQTT_SENSOR_TOPIC: yolobit/sensor/+
+      MQTT_COMMAND_TOPIC: yolobit/command
+      DEVICE_ID: "1"
     ports:
       - "8080:8080"
 
-  iot-dashboard:
+  web:
     build:
       context: .
-      dockerfile: artifacts/iot-dashboard/Dockerfile
-      args:
-        WEB_PORT: 80
-        BASE_PATH: /
-        API_PORT: 8080
+      dockerfile: docker/Dockerfile.web
+    container_name: yolobit-web
     restart: unless-stopped
     depends_on:
       - api-server
     ports:
-      - "80:80"
+      - "23411:80"
 
 volumes:
-  postgres_data:
-  mosquitto_data:
-  mosquitto_log:
+  postgres-data:
+  mosquitto-data:
+  mosquitto-log:

@@ -1,12 +1,39 @@
-node_modules
 **/node_modules
-dist
 **/dist
-coverage
+**/build
+**/.cache
+**/.turbo
+**/.next
+**/out-tsc
+**/*.tsbuildinfo
+
 .git
+.github
 .gitignore
+
+.replit
+.replit-artifact
+.local
+.config
+attached_assets/screenshots
+**/.replit-artifact
+**/.replit
+
+# logs
+*.log
+**/logs
+/tmp
+
+# editors
+.idea
+.vscode
+*.swp
+.DS_Store
+
+# env files (use docker-compose env_file or environment instead)
 .env
 .env.*
-**/*.log
-artifacts/**/dist
-lib/**/dist
+!.env.docker.example
+
+# docker
+docker/data

@@ -168,6 +168,93 @@ Everything is pre-wired in the Replit workspace:
 
 Open the **Web View** to see the dashboard, sign in with `admin` / `admin123`.
 
+## How to Run (Docker)
+
+A complete Docker setup is provided that runs the **whole stack** with one
+command — Postgres, an MQTT broker, the API server, and the dashboard.
+
+### Prerequisites
+- Docker Engine 24+ and the `docker compose` plugin
+- ~2 GB of free disk for the images and Postgres data
+
+### Quick start
+
+```bash
+# 1. Clone the project
+git clone <your-repo-url> yolobit
+cd yolobit
+
+# 2. (Optional) Override defaults — at minimum set a real JWT_SECRET
+cp .env.docker.example .env
+
+# 3. Build and start everything in the background
+docker compose up -d --build
+
+# 4. Watch the logs (Ctrl+C just detaches — containers keep running)
+docker compose logs -f api-server web
+```
+
+When the API container finishes booting it automatically:
+
+1. Waits for Postgres to be ready
+2. Pushes the Drizzle schema (`pnpm --filter @workspace/db run push`)
+3. Seeds the demo users (`admin` / `admin123`, `developer` / `dev123`)
+4. Starts the Express server on port `8080`
+
+### Services & Ports
+
+| Service     | Container          | Host port | Notes                                  |
+| ----------- | ------------------ | --------- | -------------------------------------- |
+| Dashboard   | `yolobit-web`      | **23411** | nginx serving the built SPA            |
+| API server  | `yolobit-api`      | **8080**  | Express + JWT + MQTT client            |
+| PostgreSQL  | `yolobit-postgres` | **5432**  | user/pw/db = `yolobit`                 |
+| MQTT broker | `yolobit-mosquitto`| **1883**  | anonymous, config in `artifacts/mqtt/` |
+
+Open [http://localhost:23411](http://localhost:23411) and sign in with
+`admin` / `admin123`.
+
+### Useful commands
+
+```bash
+docker compose ps                       # status of every service
+docker compose logs -f api-server       # tail one service
+docker compose exec postgres psql -U yolobit
+docker compose restart api-server       # restart after env changes
+docker compose down                     # stop (keeps volumes)
+docker compose down -v                  # stop AND wipe Postgres + MQTT data
+docker compose build --no-cache web     # rebuild a single image
+```
+
+### Re-seeding or pushing schema manually
+
+```bash
+docker compose exec api-server pnpm --filter @workspace/db run push
+docker compose exec api-server pnpm --filter @workspace/scripts run seed-users
+```
+
+### Pointing the device at the dockerised broker
+
+Edit `device/device.py` and set:
+
+```python
+MQTT_HOST = "<your-host-ip>"   # the machine running `docker compose`
+MQTT_PORT = 1883
+```
+
+### Files involved
+
+| File                       | Purpose                                       |
+| -------------------------- | --------------------------------------------- |
+| `docker-compose.yml`       | Orchestrates all four services                |
+| `docker/Dockerfile.api`    | Node 20 + pnpm image for the API server       |
+| `docker/Dockerfile.web`    | Multi-stage: build with Vite, serve via nginx |
+| `docker/nginx.conf`        | SPA fallback + `/api/` proxy to api-server    |
+| `docker/entrypoint-api.sh` | Wait-for-Postgres → push schema → seed → run  |
+| `.dockerignore`            | Keeps `node_modules`, `.git`, etc. out        |
+| `.env.docker.example`      | Template for compose-level env overrides      |
+
+---
+
 ## How to Run (Local Machine)
 
 ```bash
