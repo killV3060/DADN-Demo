@@ -78,13 +78,20 @@ Re-seed: `pnpm --filter @workspace/scripts run seed-users`
 
 | Variable | Default | Description |
 |---|---|---|
-| `API_PORT` | — | Server port (required) |
-| `MQTT_URL` | — | MQTT broker URL e.g. `mqtt://34.1.136.26:1883` |
+| `API_PORT` | `8080` | Server port |
+| `MQTT_URL` | — | MQTT broker URL e.g. `mqtt://34.1.136.26:1883` (optional — disabled when unset) |
 | `MQTT_SENSOR_TOPIC` | `yolobit/sensor/+` | Topic to subscribe for sensor data |
 | `MQTT_COMMAND_TOPIC` | `yolobit/command` | Base topic for commands |
 | `DEVICE_ID` | `1` | Device ID used in MQTT topics |
-| `DATABASE_URL` | — | PostgreSQL connection string |
-| `JWT_SECRET` | — | Secret for JWT signing |
+| `DATABASE_URL` | (auto) | PostgreSQL connection string (provisioned by Replit) |
+| `JWT_SECRET` | `dev-secret-change-in-production` | Secret for JWT signing — set in production |
+
+## Local Setup Steps
+
+1. `pnpm install`
+2. Database is auto-provisioned (Replit). Push schema: `pnpm --filter @workspace/db run push`
+3. Seed users: `pnpm --filter @workspace/scripts run seed-users`
+4. Start workflows (api-server on 8080, web on 23411).
 
 ## Device (MicroPython)
 
