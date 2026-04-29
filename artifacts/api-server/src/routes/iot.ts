@@ -22,6 +22,8 @@ import {
   startDemoMode,
   disconnect,
   getAvailablePorts,
+  ingestSensorReading,
+  getSensorDataForSource,
 } from "../lib/yolobit";
 import { getRecentSensorReadings } from "../lib/db";
 
@@ -29,8 +31,45 @@ const router: IRouter = Router();
 
 // GET /api/data - returns latest sensor readings
 router.get("/data", async (req, res): Promise<void> => {
-  const data = getSensorData();
+  const source = typeof req.query["source"] === "string" ? req.query["source"] : typeof req.query["device"] === "string" ? req.query["device"] : null;
+  const data = source ? getSensorDataForSource(source) ?? getSensorData() : getSensorData();
   res.json(GetSensorDataResponse.parse(data));
+});
+
+// POST /api/data - accept sensor readings from WiFi devices or other external sources
+router.post("/data", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, unknown> | null;
+
+  const temperature = body?.["temperature"];
+  const humidity = body?.["humidity"];
+  const luminosity = body?.["luminosity"];
+  const timestamp = typeof body?.["timestamp"] === "string" ? body["timestamp"] : null;
+  const sourceCandidate = typeof body?.["source"] === "string" ? body["source"] : typeof body?.["deviceId"] === "string" ? body["deviceId"] : "wifi";
+
+  const isNullableNumber = (value: unknown): value is number | null => value === null || typeof value === "number";
+
+  if (!isNullableNumber(temperature) || !isNullableNumber(humidity) || !isNullableNumber(luminosity)) {
+    res.status(400).json({ error: "temperature, humidity, and luminosity must be numbers or null" });
+    return;
+  }
+
+  try {
+    await ingestSensorReading({
+      source: sourceCandidate,
+      temperature,
+      humidity,
+      luminosity,
+      timestamp,
+      rawPayload: body,
+    });
+
+    const current = getSensorDataForSource(sourceCandidate) ?? getSensorData();
+    res.status(201).json(GetSensorDataResponse.parse(current));
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    req.log.error({ err: msg }, "Could not ingest sensor reading");
+    res.status(500).json({ error: "Could not ingest sensor reading" });
+  }
 });
 
 // GET /api/data/history?limit=100 - returns recent readings from PostgreSQL

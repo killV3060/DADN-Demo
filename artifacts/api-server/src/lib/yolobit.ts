@@ -19,6 +19,22 @@ interface SensorState {
   humidMin: number;
 }
 
+interface SensorSnapshot {
+  temperature: number | null;
+  humidity: number | null;
+  luminosity: number | null;
+  timestamp: string | null;
+}
+
+interface SensorReadingInput {
+  source: string;
+  temperature: number | null;
+  humidity: number | null;
+  luminosity: number | null;
+  timestamp?: string | null;
+  rawPayload?: Record<string, unknown> | null;
+}
+
 const state: SensorState = {
   temperature: null,
   humidity: null,
@@ -33,42 +49,75 @@ let connectedPort: string | null = null;
 let connectionMode: string | null = null;
 let demoInterval: ReturnType<typeof setInterval> | null = null;
 let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+const latestSensorReadings = new Map<string, SensorSnapshot>();
+let latestSensorSource: string | null = null;
 const intentionalClosePorts = new WeakSet<SerialPort>();
 
-function toSensorPayload(source: "serial" | "demo" | "mqtt"): SensorTopicPayload {
+function toSensorPayload(source: string, snapshot: SensorSnapshot = state): SensorTopicPayload {
   return {
-    temperature: state.temperature,
-    humidity: state.humidity,
-    luminosity: state.luminosity,
-    timestamp: state.timestamp ?? new Date().toISOString(),
+    temperature: snapshot.temperature,
+    humidity: snapshot.humidity,
+    luminosity: snapshot.luminosity,
+    timestamp: snapshot.timestamp ?? new Date().toISOString(),
     source,
   };
 }
 
-async function persistSensor(source: "serial" | "demo" | "mqtt"): Promise<void> {
-  const payload = toSensorPayload(source);
+function getWarningsForSnapshot(snapshot: SensorSnapshot) {
+  return {
+    temperatureHigh: snapshot.temperature !== null && snapshot.temperature > state.tempMax,
+    humidityLow: snapshot.humidity !== null && snapshot.humidity < state.humidMin,
+  };
+}
+
+function cacheSnapshot(source: string, snapshot: SensorSnapshot): void {
+  latestSensorReadings.set(source, snapshot);
+  latestSensorSource = source;
+}
+
+async function persistSensorReading(input: SensorReadingInput): Promise<void> {
+  const snapshot: SensorSnapshot = {
+    temperature: input.temperature,
+    humidity: input.humidity,
+    luminosity: input.luminosity,
+    timestamp: input.timestamp ?? new Date().toISOString(),
+  };
+
+  state.temperature = snapshot.temperature;
+  state.humidity = snapshot.humidity;
+  state.luminosity = snapshot.luminosity;
+  state.timestamp = snapshot.timestamp;
+
+  cacheSnapshot(input.source, snapshot);
+
+  const payload = toSensorPayload(input.source, snapshot);
   await saveSensorReading({
-    source,
+    source: input.source,
     temperature: payload.temperature ?? null,
     humidity: payload.humidity ?? null,
     luminosity: payload.luminosity ?? null,
     timestamp: payload.timestamp,
-    rawPayload: payload as Record<string, unknown>,
+    rawPayload: input.rawPayload ?? (payload as Record<string, unknown>),
   });
 }
 
-async function onSensorUpdated(source: "serial" | "demo"): Promise<void> {
-  const payload = toSensorPayload(source);
-
+async function onSensorUpdated(source: string): Promise<void> {
   try {
-    await persistSensor(source);
+    await persistSensorReading({
+      source,
+      temperature: state.temperature,
+      humidity: state.humidity,
+      luminosity: state.luminosity,
+      timestamp: state.timestamp,
+      rawPayload: toSensorPayload(source, state) as Record<string, unknown>,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown DB error";
     logger.warn({ err: message }, "Could not persist sensor data");
   }
 
   try {
-    await publishSensorPayload(payload);
+    await publishSensorPayload(source, toSensorPayload(source, state));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown MQTT error";
     logger.warn({ err: message }, "Could not publish sensor payload");
@@ -114,7 +163,16 @@ export function applyMqttSensorData(payload: SensorTopicPayload): void {
 
   state.timestamp = payload.timestamp ?? new Date().toISOString();
 
-  void persistSensor("mqtt").catch((error) => {
+  const source = payload.source ?? "mqtt";
+
+  void persistSensorReading({
+    source,
+    temperature: state.temperature,
+    humidity: state.humidity,
+    luminosity: state.luminosity,
+    timestamp: state.timestamp,
+    rawPayload: payload as Record<string, unknown>,
+  }).catch((error) => {
     const message = error instanceof Error ? error.message : "Unknown DB error";
     logger.warn({ err: message }, "Could not persist MQTT sensor payload");
   });
@@ -257,7 +315,7 @@ export async function sendCommand(cmd: string): Promise<void> {
   let publishedToMqtt = false;
 
   try {
-    await publishCommand(cmd);
+    await publishCommand(connectedPort ?? "dashboard", cmd);
     publishedToMqtt = hasMqttConnection();
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown MQTT error";
@@ -331,16 +389,41 @@ export async function getAvailablePorts(): Promise<string[]> {
 
 // Get current sensor data with warning flags
 export function getSensorData() {
-  return {
+  const snapshot = latestSensorSource ? latestSensorReadings.get(latestSensorSource) : null;
+  const sourceSnapshot = snapshot ?? {
     temperature: state.temperature,
     humidity: state.humidity,
     luminosity: state.luminosity,
     timestamp: state.timestamp,
-    warnings: {
-      temperatureHigh: state.temperature !== null && state.temperature > state.tempMax,
-      humidityLow: state.humidity !== null && state.humidity < state.humidMin,
-    },
   };
+
+  return {
+    temperature: sourceSnapshot.temperature,
+    humidity: sourceSnapshot.humidity,
+    luminosity: sourceSnapshot.luminosity,
+    timestamp: sourceSnapshot.timestamp,
+    warnings: getWarningsForSnapshot(sourceSnapshot),
+  };
+}
+
+export function getSensorDataForSource(source: string) {
+  const snapshot = latestSensorReadings.get(source);
+
+  if (!snapshot) {
+    return null;
+  }
+
+  return {
+    temperature: snapshot.temperature,
+    humidity: snapshot.humidity,
+    luminosity: snapshot.luminosity,
+    timestamp: snapshot.timestamp,
+    warnings: getWarningsForSnapshot(snapshot),
+  };
+}
+
+export async function ingestSensorReading(input: SensorReadingInput): Promise<void> {
+  await persistSensorReading(input);
 }
 
 // Get/set thresholds

@@ -15,6 +15,10 @@ interface ControlButtonProps {
   variant?: 'default' | 'danger' | 'success';
 }
 
+interface ControlPanelProps {
+  scopeLabel?: string;
+}
+
 function ControlButton({ label, command, active, onClick, isLoading, variant = 'default' }: ControlButtonProps) {
   return (
     <button
@@ -41,7 +45,7 @@ function ControlButton({ label, command, active, onClick, isLoading, variant = '
   );
 }
 
-export function ControlPanel() {
+export function ControlPanel({ scopeLabel }: ControlPanelProps) {
   const { toast } = useToast();
   const [activeCommands, setActiveCommands] = useState<Record<string, string>>({
     servo: "2", // default closed
@@ -52,24 +56,24 @@ export function ControlPanel() {
 
   const { mutate: sendCommand, isPending } = useSendCommand({
     mutation: {
-      onSuccess: (_, variables) => {
+      onSuccess: (_data: unknown, variables: { data: { command: string } }) => {
         const cmd = variables.data.command;
         // Optimistically update local state to show active button
-        if (cmd === "1" || cmd === "2") setActiveCommands(prev => ({ ...prev, servo: cmd }));
-        if (cmd === "3" || cmd === "4") setActiveCommands(prev => ({ ...prev, led: cmd }));
-        if (cmd >= "5" && cmd <= "8") setActiveCommands(prev => ({ ...prev, fan: cmd }));
-        if (cmd === "9" || cmd === "10") setActiveCommands(prev => ({ ...prev, rgb: cmd }));
+        if (cmd === "1" || cmd === "2") setActiveCommands((prev: Record<string, string>) => ({ ...prev, servo: cmd }));
+        if (cmd === "3" || cmd === "4") setActiveCommands((prev: Record<string, string>) => ({ ...prev, led: cmd }));
+        if (cmd >= "5" && cmd <= "8") setActiveCommands((prev: Record<string, string>) => ({ ...prev, fan: cmd }));
+        if (cmd === "9" || cmd === "10") setActiveCommands((prev: Record<string, string>) => ({ ...prev, rgb: cmd }));
         
         toast({
           title: "Command Sent",
           description: `Successfully sent command: ${cmd}`,
         });
       },
-      onError: (error) => {
+      onError: (error: unknown) => {
         toast({
           variant: "destructive",
           title: "Command Failed",
-          description: (error as any)?.error || "Failed to communicate with device",
+          description: (error as { error?: string })?.error || "Failed to communicate with device",
         });
       }
     }
@@ -85,7 +89,12 @@ export function ControlPanel() {
         <div className="p-2 rounded-lg bg-primary/10 text-primary">
           <Settings2 className="w-5 h-5" />
         </div>
-        <h2 className="font-display text-xl font-semibold">Device Controls</h2>
+        <div>
+          <h2 className="font-display text-xl font-semibold">Device Controls</h2>
+          <p className="text-xs text-muted-foreground mt-1 font-mono">
+            {scopeLabel ? `Target: ${scopeLabel}` : "Target: current device"}
+          </p>
+        </div>
       </div>
 
       <div className="space-y-6 flex-1">

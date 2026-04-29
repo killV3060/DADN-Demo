@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useGetSensorData, useGetConnectionStatus } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { Activity, Droplets, Sun, AlertTriangle, Cpu } from "lucide-react";
@@ -8,19 +9,112 @@ import { ControlPanel } from "@/components/dashboard/ControlPanel";
 import { ConnectionPanel } from "@/components/dashboard/ConnectionPanel";
 import { ThresholdSettings } from "@/components/dashboard/ThresholdSettings";
 
-export default function Dashboard() {
-  const { data: sensorData, isError, error } = useGetSensorData({
-    query: { 
-      queryKey: ['sensor-data'],
-      refetchInterval: 1000,
-      retry: 2
+type DashboardMode = "demo" | "serial" | "wifi";
+
+interface DashboardScope {
+  mode: DashboardMode;
+  serialPort: string;
+  wifiDeviceId: string;
+}
+
+const DEFAULT_SCOPE: DashboardScope = {
+  mode: "demo",
+  serialPort: "demo",
+  wifiDeviceId: "device1",
+};
+
+const SCOPE_STORAGE_KEY = "iot-dashboard-scope";
+
+function buildScopeLabel(scope: DashboardScope): string {
+  if (scope.mode === "wifi") {
+    return `Wifi (${scope.wifiDeviceId})`;
+  }
+
+  if (scope.mode === "serial") {
+    return scope.serialPort ? `Serial (${scope.serialPort})` : "Serial";
+  }
+
+  return "Demo";
+}
+
+function readInitialScope(): DashboardScope {
+  if (typeof window === "undefined") {
+    return DEFAULT_SCOPE;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const storedScope = window.localStorage.getItem(SCOPE_STORAGE_KEY);
+
+  let fallbackScope: DashboardScope = DEFAULT_SCOPE;
+
+  if (storedScope) {
+    try {
+      fallbackScope = { ...DEFAULT_SCOPE, ...JSON.parse(storedScope) };
+    } catch {
+      fallbackScope = DEFAULT_SCOPE;
     }
+  }
+
+  const modeParam = params.get("mode");
+  const serialPortParam = params.get("port");
+  const wifiDeviceIdParam = params.get("device");
+
+  const mode = modeParam === "wifi" || modeParam === "serial" || modeParam === "demo"
+    ? modeParam
+    : fallbackScope.mode;
+
+  return {
+    mode,
+    serialPort: serialPortParam ?? fallbackScope.serialPort,
+    wifiDeviceId: wifiDeviceIdParam ?? fallbackScope.wifiDeviceId,
+  };
+}
+
+export default function Dashboard() {
+  const [scope, setScope] = useState<DashboardScope>(() => readInitialScope());
+  const { data: sensorData, isError, error } = useGetSensorData({
+    query: {
+      queryKey: ["sensor-data", scope.mode, scope.mode === "wifi" ? scope.wifiDeviceId : scope.serialPort],
+      refetchInterval: 1000,
+      retry: 2,
+    },
+    request: {
+      query: scope.mode === "wifi"
+        ? { source: scope.wifiDeviceId }
+        : scope.mode === "serial"
+          ? { source: scope.serialPort }
+          : { source: "demo" },
+    },
   });
   
   const { data: connectionData } = useGetConnectionStatus();
 
   const hasWarnings = sensorData?.warnings?.temperatureHigh || sensorData?.warnings?.humidityLow;
   const isConnected = connectionData?.connected;
+  const scopeLabel = buildScopeLabel(scope);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(SCOPE_STORAGE_KEY, JSON.stringify(scope));
+
+    const params = new URLSearchParams(window.location.search);
+    params.set("mode", scope.mode);
+
+    if (scope.mode === "wifi") {
+      params.set("device", scope.wifiDeviceId);
+      params.delete("port");
+    } else {
+      params.set("port", scope.mode === "serial" ? scope.serialPort : "demo");
+      params.delete("device");
+    }
+
+    const search = params.toString();
+    const nextUrl = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, [scope]);
 
   const formattedTime = sensorData?.timestamp 
     ? format(new Date(sensorData.timestamp), "HH:mm:ss.SSS")
@@ -41,6 +135,10 @@ export default function Dashboard() {
             </h1>
           </div>
           <p className="text-muted-foreground ml-14">IoT Telemetry & Control Center</p>
+          <div className="ml-14 mt-3 inline-flex items-center gap-2 rounded-full border border-border/50 bg-card/40 px-3 py-1 text-xs font-medium text-muted-foreground">
+            <span className="uppercase tracking-wider">Viewing</span>
+            <span className="font-mono text-foreground">{scopeLabel}</span>
+          </div>
         </div>
         
         <div className="flex items-center gap-3 bg-card/40 backdrop-blur-sm border border-border/50 px-4 py-2 rounded-full">
@@ -53,7 +151,11 @@ export default function Dashboard() {
       </header>
 
       {/* CONNECTION PANEL */}
-      <ConnectionPanel />
+      <ConnectionPanel
+        scope={scope}
+        scopeLabel={scopeLabel}
+        onScopeChange={setScope}
+      />
 
       {/* WARNING BANNER */}
       <AnimatePresence>
@@ -125,12 +227,12 @@ export default function Dashboard() {
             />
           </div>
 
-          <ControlPanel />
+          <ControlPanel scopeLabel={scopeLabel} />
         </div>
 
         {/* RIGHT COLUMN: SETTINGS (Spans 4 cols on desktop) */}
         <div className="lg:col-span-4">
-          <ThresholdSettings />
+          <ThresholdSettings scopeLabel={scopeLabel} />
         </div>
 
       </div>

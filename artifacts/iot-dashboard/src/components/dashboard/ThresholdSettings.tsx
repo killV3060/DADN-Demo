@@ -8,7 +8,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
-export function ThresholdSettings() {
+interface ThresholdSettingsProps {
+  scopeLabel?: string;
+}
+
+export function ThresholdSettings({ scopeLabel }: ThresholdSettingsProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [tempMax, setTempMax] = useState<string>("35");
@@ -25,7 +29,7 @@ export function ThresholdSettings() {
         });
         queryClient.invalidateQueries({ queryKey: ["/api/thresholds"] });
       },
-      onError: (error) => {
+      onError: (_error: unknown) => {
         toast({
           variant: "destructive",
           title: "Update Failed",
@@ -74,7 +78,7 @@ export function ThresholdSettings() {
             Alert Thresholds
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Configure when warnings trigger
+            {scopeLabel ? `Configure warnings for ${scopeLabel}` : "Configure when warnings trigger"}
           </p>
         </div>
       </div>

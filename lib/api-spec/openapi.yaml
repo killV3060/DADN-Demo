@@ -33,6 +33,13 @@ paths:
       tags: [iot]
       summary: Get sensor data
       description: Returns the latest sensor readings from Yolobit
+      parameters:
+        - in: query
+          name: source
+          required: false
+          schema:
+            type: string
+          description: Optional source/device identifier to fetch a specific device snapshot
       responses:
         "200":
           description: Latest sensor data
@@ -40,6 +47,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SensorData"
+    post:
+      operationId: postSensorData
+      tags: [iot]
+      summary: Submit sensor data
+      description: Accepts telemetry pushed from a WiFi device or another external source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SensorDataSubmit"
+      responses:
+        "201":
+          description: Sensor data stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorData"
+        "400":
+          description: Invalid sensor payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /control:
     post:
@@ -188,6 +219,28 @@ components:
         - luminosity
         - timestamp
         - warnings
+
+    SensorDataSubmit:
+      type: object
+      properties:
+        temperature:
+          type: ["number", "null"]
+        humidity:
+          type: ["number", "null"]
+        luminosity:
+          type: ["number", "null"]
+        timestamp:
+          type: ["string", "null"]
+        source:
+          type: string
+          description: Source/device identifier, for example wifi or device1
+        deviceId:
+          type: string
+          description: Alias for source when pushing from a specific WiFi device
+      required:
+        - temperature
+        - humidity
+        - luminosity
 
     ControlCommand:
       type: object

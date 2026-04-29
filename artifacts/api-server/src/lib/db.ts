@@ -12,7 +12,7 @@ export interface SensorReadingInput {
   humidity: number | null;
   luminosity: number | null;
   timestamp?: string | null;
-  source: "serial" | "demo" | "mqtt";
+  source: string;
   rawPayload?: Record<string, unknown> | null;
 }
 

@@ -1,5 +1,6 @@
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
+  query?: Record<string, string | number | boolean | null | undefined | Array<string | number | boolean | null | undefined>>;
 };
 
 export type ErrorType<T = unknown> = ApiError<T>;
@@ -67,6 +68,40 @@ function applyBaseUrl(input: RequestInfo | URL): RequestInfo | URL {
   if (typeof input === "string") return absolute;
   if (isUrl(input)) return new URL(absolute);
   return new Request(absolute, input as Request);
+}
+
+function applyQueryParams(
+  input: RequestInfo | URL,
+  query?: CustomFetchOptions["query"],
+): RequestInfo | URL {
+  if (!query) return input;
+
+  const rawUrl = resolveUrl(input);
+  const [path, existingSearch = ""] = rawUrl.split("?", 2);
+  const searchParams = new URLSearchParams(existingSearch);
+
+  for (const [key, value] of Object.entries(query)) {
+    if (value == null) {
+      searchParams.delete(key);
+      continue;
+    }
+
+    const values = Array.isArray(value) ? value : [value];
+    searchParams.delete(key);
+
+    for (const item of values) {
+      if (item == null) {
+        continue;
+      }
+      searchParams.append(key, String(item));
+    }
+  }
+
+  const nextUrl = searchParams.toString() ? `${path}?${searchParams.toString()}` : path;
+
+  if (typeof input === "string") return nextUrl;
+  if (isUrl(input)) return new URL(nextUrl, input);
+  return new Request(nextUrl, input as Request);
 }
 
 function resolveUrl(input: RequestInfo | URL): string {
@@ -324,7 +359,8 @@ export async function customFetch<T = unknown>(
   options: CustomFetchOptions = {},
 ): Promise<T> {
   input = applyBaseUrl(input);
-  const { responseType = "auto", headers: headersInit, ...init } = options;
+  const { responseType = "auto", headers: headersInit, query, ...init } = options;
+  input = applyQueryParams(input, query);
 
   const method = resolveMethod(input, init.method);
 
