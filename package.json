@@ -5,6 +5,8 @@
   "scripts": {
     "preinstall": "",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "push": "pnpm --filter @workspace/db run push",
+    "push-force": "pnpm --filter @workspace/db run push-force",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },
