@@ -1,8 +1,13 @@
 import { config as loadEnv } from "dotenv";
 import { defineConfig } from "drizzle-kit";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 loadEnv({
-  path: "../../.env", // 👈 đơn giản hóa
+  path: path.resolve(currentDir, "..", "..", ".env"),
+  override: true,
 });
 
 if (!process.env.DATABASE_URL) {
