@@ -37,7 +37,7 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgres://postgres:password@db:5432/yolobit_db
       MQTT_URL: mqtt://mqtt:1883
-      MQTT_SENSOR_TOPIC: yolobit/sensor
+      MQTT_SENSOR_TOPIC: yolobit/sensor/+
       MQTT_COMMAND_TOPIC: yolobit/command
     depends_on:
       mqtt:

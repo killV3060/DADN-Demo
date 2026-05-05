@@ -170,6 +170,13 @@ export function applyMqttSensorData(payload: SensorTopicPayload): void {
 
   const source = payload.source ?? "mqtt";
 
+  // Mark as WiFi connected when receiving MQTT data
+  if (connectionMode !== "wifi") {
+    connectionMode = "wifi";
+    connectedPort = source;
+    logger.info({ source }, "WiFi device connected via MQTT");
+  }
+
   logger.info({ source, temperature: state.temperature, humidity: state.humidity, luminosity: state.luminosity }, "Persisting MQTT sensor data");
 
   void persistSensorReading({
