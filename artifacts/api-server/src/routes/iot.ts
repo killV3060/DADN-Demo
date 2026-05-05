@@ -35,7 +35,14 @@ router.get("/data", async (req, res): Promise<void> => {
   const source = typeof req.query["source"] === "string" ? req.query["source"] : typeof req.query["device"] === "string" ? req.query["device"] : null;
   
   const data = source ? getSensorDataForSource(source) ?? getSensorData() : getSensorData();
-  res.json(GetSensorDataResponse.parse(data));
+  const response = {
+    temperature: data.temperature,
+    humidity: data.humidity,
+    luminosity: data.luminosity,
+    timestamp: typeof data.timestamp === "string" ? data.timestamp : null,
+    warnings: data.warnings,
+  };
+  res.json(GetSensorDataResponse.parse(response));
 });
 
 // POST /api/data - accept sensor readings from WiFi devices or other external sources
@@ -66,7 +73,14 @@ router.post("/data", async (req, res): Promise<void> => {
     });
 
     const current = getSensorDataForSource(sourceCandidate) ?? getSensorData();
-    res.status(201).json(GetSensorDataResponse.parse(current));
+    const response = {
+      temperature: current.temperature,
+      humidity: current.humidity,
+      luminosity: current.luminosity,
+      timestamp: typeof current.timestamp === "string" ? current.timestamp : null,
+      warnings: current.warnings,
+    };
+    res.status(201).json(GetSensorDataResponse.parse(response));
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     req.log.error({ err: msg }, "Could not ingest sensor reading");
