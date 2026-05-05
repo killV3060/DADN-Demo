@@ -1,8 +1,16 @@
 import { config as loadEnv } from "dotenv";
 import { defineConfig } from "drizzle-kit";
 import path from "path";
+import { fileURLToPath } from "url";
 
-loadEnv({ path: path.resolve(import.meta.dirname, "..", "..", ".env") });
+// 👇 fix __dirname cho môi trường ESM/CJS
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// 👇 dùng __dirname thay vì import.meta.dirname
+loadEnv({
+  path: path.resolve(__dirname, "..", "..", ".env"),
+});
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL, ensure the database is provisioned");
