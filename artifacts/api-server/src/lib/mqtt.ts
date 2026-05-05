@@ -127,7 +127,10 @@ export async function publishCommand(deviceId: string, command: string): Promise
     return;
   }
 
-  const topic = `yolobit/command/${deviceId}`;
+  const normalizedDeviceId = deviceId.startsWith("device")
+    ? deviceId.replace(/^device/, "")
+    : deviceId;
+  const topic = `yolobit/command/${normalizedDeviceId}`;
 
   const payload = {
     command,
