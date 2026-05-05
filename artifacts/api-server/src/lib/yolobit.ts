@@ -142,12 +142,17 @@ function parseYolobitData(raw: string): void {
 }
 
 export function applyMqttSensorData(payload: SensorTopicPayload): void {
+  logger.info({ payload }, "applyMqttSensorData called");
+
   const hasValue =
     typeof payload.temperature === "number" ||
     typeof payload.humidity === "number" ||
     typeof payload.luminosity === "number";
 
+  logger.debug({ temperature: typeof payload.temperature, humidity: typeof payload.humidity, luminosity: typeof payload.luminosity, hasValue }, "Type check");
+
   if (!hasValue) {
+    logger.warn({ payload }, "No numeric values in MQTT payload, skipping");
     return;
   }
 
@@ -164,6 +169,8 @@ export function applyMqttSensorData(payload: SensorTopicPayload): void {
   state.timestamp = payload.timestamp ?? new Date().toISOString();
 
   const source = payload.source ?? "mqtt";
+
+  logger.info({ source, temperature: state.temperature, humidity: state.humidity, luminosity: state.luminosity }, "Persisting MQTT sensor data");
 
   void persistSensorReading({
     source,

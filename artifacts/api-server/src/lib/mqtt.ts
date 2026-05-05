@@ -68,9 +68,13 @@ export function initMqttClient(options: MqttInitOptions = {}): void {
 
     const deviceId = topic.split("/")[2];
     const source = `device${deviceId}`;
+    const rawMessage = payloadBuffer.toString();
+
+    logger.info({ topic, source, rawMessage }, "MQTT message received");
 
     try {
-      const payload = JSON.parse(payloadBuffer.toString()) as SensorTopicPayload;
+      const payload = JSON.parse(rawMessage) as SensorTopicPayload;
+      logger.debug({ payload, source }, "Parsed MQTT payload");
 
       options.onSensorMessage?.({
         ...payload,
@@ -78,7 +82,7 @@ export function initMqttClient(options: MqttInitOptions = {}): void {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown parse error";
-      logger.warn({ err: message, topic }, "Invalid MQTT payload");
+      logger.warn({ err: message, topic, rawMessage }, "Invalid MQTT payload");
     }
   });
 
