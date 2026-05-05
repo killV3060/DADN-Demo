@@ -67,13 +67,14 @@ export function initMqttClient(options: MqttInitOptions = {}): void {
     }
 
     const deviceId = topic.split("/")[2];
+    const source = `device${deviceId}`;
 
     try {
       const payload = JSON.parse(payloadBuffer.toString()) as SensorTopicPayload;
 
       options.onSensorMessage?.({
         ...payload,
-        source: deviceId,
+        source,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown parse error";

@@ -31,7 +31,9 @@ const router: IRouter = Router();
 
 // GET /api/data - returns latest sensor readings
 router.get("/data", async (req, res): Promise<void> => {
+  // source=device1
   const source = typeof req.query["source"] === "string" ? req.query["source"] : typeof req.query["device"] === "string" ? req.query["device"] : null;
+  
   const data = source ? getSensorDataForSource(source) ?? getSensorData() : getSensorData();
   res.json(GetSensorDataResponse.parse(data));
 });
