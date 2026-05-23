@@ -1,0 +1,318 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: IoT Dashboard API for Yolobit device
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: iot
+    description: IoT sensor data and device control
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /data:
+    get:
+      operationId: getSensorData
+      tags: [iot]
+      summary: Get sensor data
+      description: Returns the latest sensor readings from Yolobit
+      parameters:
+        - in: query
+          name: source
+          required: false
+          schema:
+            type: string
+          description: Optional source/device identifier to fetch a specific device snapshot
+      responses:
+        "200":
+          description: Latest sensor data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorData"
+    post:
+      operationId: postSensorData
+      tags: [iot]
+      summary: Submit sensor data
+      description: Accepts telemetry pushed from a WiFi device or another external source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SensorDataSubmit"
+      responses:
+        "201":
+          description: Sensor data stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorData"
+        "400":
+          description: Invalid sensor payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /control:
+    post:
+      operationId: sendCommand
+      tags: [iot]
+      summary: Send control command
+      description: Send a command to the Yolobit device (1-10)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ControlCommand"
+      responses:
+        "200":
+          description: Command sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandResult"
+        "400":
+          description: Invalid command
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /thresholds:
+    get:
+      operationId: getThresholds
+      tags: [iot]
+      summary: Get alert thresholds
+      description: Returns current temperature max and humidity min thresholds
+      responses:
+        "200":
+          description: Current thresholds
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thresholds"
+    post:
+      operationId: setThresholds
+      tags: [iot]
+      summary: Set alert thresholds
+      description: Update temperature max and humidity min thresholds
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Thresholds"
+      responses:
+        "200":
+          description: Thresholds updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thresholds"
+
+  /connection:
+    get:
+      operationId: getConnectionStatus
+      tags: [iot]
+      summary: Get connection status
+      description: Returns whether device is connected and connection details
+      responses:
+        "200":
+          description: Connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionStatus"
+    post:
+      operationId: connectDevice
+      tags: [iot]
+      summary: Connect to device
+      description: Connect to Yolobit via serial port
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectRequest"
+      responses:
+        "200":
+          description: Connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectionStatus"
+        "400":
+          description: Connection error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /ports:
+    get:
+      operationId: listSerialPorts
+      tags: [iot]
+      summary: List available serial ports
+      description: Returns list of available COM/serial ports
+      responses:
+        "200":
+          description: Available ports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortList"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    SensorData:
+      type: object
+      properties:
+        temperature:
+          type: ["number", "null"]
+        humidity:
+          type: ["number", "null"]
+        luminosity:
+          type: ["number", "null"]
+        timestamp:
+          type: ["string", "null"]
+        warnings:
+          type: object
+          properties:
+            temperatureHigh:
+              type: boolean
+            humidityLow:
+              type: boolean
+          required:
+            - temperatureHigh
+            - humidityLow
+      required:
+        - temperature
+        - humidity
+        - luminosity
+        - timestamp
+        - warnings
+
+    SensorDataSubmit:
+      type: object
+      properties:
+        temperature:
+          type: ["number", "null"]
+        humidity:
+          type: ["number", "null"]
+        luminosity:
+          type: ["number", "null"]
+        timestamp:
+          type: ["string", "null"]
+        source:
+          type: string
+          description: Source/device identifier, for example wifi or device1
+        deviceId:
+          type: string
+          description: Alias for source when pushing from a specific WiFi device
+      required:
+        - temperature
+        - humidity
+        - luminosity
+
+    ControlCommand:
+      type: object
+      properties:
+        command:
+          type: string
+          description: Command code (1-10 or threshold like 0000029 / 000000060)
+      required:
+        - command
+
+    CommandResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+        - message
+
+    Thresholds:
+      type: object
+      properties:
+        tempMax:
+          type: number
+          description: Maximum temperature threshold (Celsius)
+        humidMin:
+          type: number
+          description: Minimum humidity threshold (%)
+      required:
+        - tempMax
+        - humidMin
+
+    ConnectionStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        port:
+          type: ["string", "null"]
+        mode:
+          type: ["string", "null"]
+          description: "serial or demo"
+      required:
+        - connected
+        - port
+        - mode
+
+    ConnectRequest:
+      type: object
+      properties:
+        port:
+          type: string
+          description: Serial port path (e.g. COM3, /dev/ttyUSB0) or "demo" for demo mode
+      required:
+        - port
+
+    PortList:
+      type: object
+      properties:
+        ports:
+          type: array
+          items:
+            type: string
+      required:
+        - ports
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
