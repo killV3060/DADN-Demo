@@ -11,7 +11,7 @@ export interface AccessTokenPayload {
 export function signAccessToken(payload: AccessTokenPayload): string {
   const options: SignOptions = {
     expiresIn: getJwtExpiresIn() as SignOptions["expiresIn"],
-    subject: String(payload.sub),
+    // subject: String(payload.sub),
   };
 
   return jwt.sign(payload, getJwtSecret(), options);
