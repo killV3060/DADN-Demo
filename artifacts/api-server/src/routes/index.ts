@@ -8,7 +8,7 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authenticateOptional);
-router.use(authRouter);
+router.use("/auth", authRouter);
 router.use(iotRouter);
 
 export default router;
