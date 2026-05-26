@@ -30,41 +30,80 @@ function serializeUser(user: ReturnType<typeof toPublicUser>) {
 
 // POST /api/auth/login
 router.post("/login", async (req, res): Promise<void> => {
-  const parsed = loginBodySchema.safeParse(req.body);
+  // const parsed = loginBodySchema.safeParse(req.body);
 
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten().formErrors.join("; ") || "Invalid request" });
-    return;
+  // if (!parsed.success) {
+  //   res.status(400).json({ error: parsed.error.flatten().formErrors.join("; ") || "Invalid request" });
+  //   return;
+  // }
+
+  // const { username, password } = parsed.data;
+  // const user = await findUserByUsername(username);
+
+  // if (!user) {
+  //   res.status(401).json({ error: "Invalid username or password" });
+  //   return;
+  // }
+
+  // const valid = await verifyPassword(password, user.passwordHash);
+
+  // if (!valid) {
+  //   res.status(401).json({ error: "Invalid username or password" });
+  //   return;
+  // }
+
+  // const publicUser = toPublicUser(user);
+  // const accessToken = signAccessToken({
+  //   sub: publicUser.id,
+  //   username: publicUser.username,
+  //   role: publicUser.role,
+  // });
+
+  // res.json(
+  //   loginResponseSchema.parse({
+  //     accessToken,
+  //     user: serializeUser(publicUser),
+  //   }),
+  // );
+  try {
+    const parsed = loginBodySchema.safeParse(req.body);
+    
+    if (!parsed.success) {
+      const resMsg = parsed.error.flatten().formErrors.join("; ") || "Invalid request";
+      throw new Error(resMsg);
+    }
+
+    const { username, password } = parsed.data;
+    const user = await findUserByUsername(username);
+
+    if (!user) {
+      throw new Error("Invalid username or password");
+    }
+
+    const valid = await verifyPassword(password, user.passwordHash);
+
+    if (!valid) {
+      throw new Error("Invalid username or password");
+    }
+
+    const publicUser = toPublicUser(user);
+    const accessToken = signAccessToken({
+      sub: publicUser.id,
+      username: publicUser.username,
+      role: publicUser.role,
+    });
+
+    res.status(200).json(
+      loginResponseSchema.parse({
+        accessToken,
+        user: serializeUser(publicUser),
+      }),
+    );
   }
-
-  const { username, password } = parsed.data;
-  const user = await findUserByUsername(username);
-
-  if (!user) {
-    res.status(401).json({ error: "Invalid username or password" });
-    return;
+catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Login failed";
+    res.status(401).json({ error: msg });
   }
-
-  const valid = await verifyPassword(password, user.passwordHash);
-
-  if (!valid) {
-    res.status(401).json({ error: "Invalid username or password" });
-    return;
-  }
-
-  const publicUser = toPublicUser(user);
-  const accessToken = signAccessToken({
-    sub: publicUser.id,
-    username: publicUser.username,
-    role: publicUser.role,
-  });
-
-  res.json(
-    loginResponseSchema.parse({
-      accessToken,
-      user: serializeUser(publicUser),
-    }),
-  );
 });
 
 // POST /api/auth/register
