@@ -4,6 +4,11 @@ packages:
   - lib/integrations/*
   - scripts
 
+allowBuilds:
+  '@serialport/bindings-cpp': true
+  bcrypt: true
+  esbuild: true
+
 autoInstallPeers: false
 
 catalog:
