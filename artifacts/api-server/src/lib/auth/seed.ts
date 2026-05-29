@@ -26,6 +26,7 @@ export async function seedDefaultUsers(): Promise<void> {
     }
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unknown error";
-    logger.warn({ err: msg }, "Could not seed default users");
+    logger.error({ err: msg }, "Could not seed default users — run pnpm push or check DATABASE_URL");
+    throw error;
   }
 }

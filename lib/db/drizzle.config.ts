@@ -7,7 +7,8 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 loadEnv({
   path: path.resolve(currentDir, "..", "..", ".env"),
-  override: true,
+  // Keep DATABASE_URL from Docker / shell when already set
+  override: false,
 });
 
 if (!process.env.DATABASE_URL) {
