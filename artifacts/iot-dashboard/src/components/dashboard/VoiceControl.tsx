@@ -83,8 +83,8 @@ function resolveVoiceCommand(transcript: string): VoiceCommandMatch | null {
   const rules: Array<{ phrases: string[]; command: string; label: string }> = [
     { phrases: ["tat servo", "dong servo"], command: "2", label: COMMAND_LABELS["2"] },
     { phrases: ["mo servo", "bat servo"], command: "1", label: COMMAND_LABELS["1"] },
-    { phrases: ["tat led", "dong led"], command: "4", label: COMMAND_LABELS["4"] },
-    { phrases: ["mo led", "bat led"], command: "3", label: COMMAND_LABELS["3"] },
+    { phrases: ["tat led", "dong led", "tat den led", "dong den led"], command: "4", label: COMMAND_LABELS["4"] },
+    { phrases: ["mo led", "bat led", "mo den led", "bat den led"], command: "3", label: COMMAND_LABELS["3"] },
     { phrases: ["tat rgb", "dong rgb"], command: "10", label: COMMAND_LABELS["10"] },
     { phrases: ["mo rgb", "bat rgb"], command: "9", label: COMMAND_LABELS["9"] },
     { phrases: ["tat quat", "dong quat", "ngat quat"], command: "8", label: COMMAND_LABELS["8"] },
