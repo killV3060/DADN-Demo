@@ -4,6 +4,11 @@ packages:
   - lib/integrations/*
   - scripts
 
+allowBuilds:
+  '@serialport/bindings-cpp': true
+  bcrypt: true
+  esbuild: true
+
 autoInstallPeers: false
 
 catalog:
@@ -29,6 +34,7 @@ catalog:
 minimumReleaseAge: 1440
 
 onlyBuiltDependencies:
+  - bcrypt
   - '@serialport/bindings-cpp'
   - '@swc/core'
   - esbuild

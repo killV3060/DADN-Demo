@@ -3,7 +3,7 @@ FROM node:20-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.17.1 --activate
 
 WORKDIR /app
 
@@ -14,6 +14,7 @@ COPY lib/api-client-react/package.json lib/api-client-react/package.json
 COPY lib/api-spec/package.json lib/api-spec/package.json
 COPY lib/api-zod/package.json lib/api-zod/package.json
 COPY lib/db/package.json lib/db/package.json
+COPY lib/rbac/package.json lib/rbac/package.json
 
 RUN pnpm install --frozen-lockfile
 

@@ -1,6 +1,10 @@
 // iot.ts - Controller: Express routes for IoT API
 import { Router, type IRouter } from "express";
 import {
+  filterGuestSensorPayload,
+  requirePermission,
+} from "../middleware/auth";
+import {
   GetSensorDataResponse,
   SendCommandBody,
   SendCommandResponse,
@@ -29,8 +33,12 @@ import { getRecentSensorReadings } from "../lib/db";
 
 const router: IRouter = Router();
 
-// GET /api/data - returns latest sensor readings
-router.get("/data", async (req, res): Promise<void> => {
+// GET /api/data - returns latest sensor readings (public / guest / authenticated)
+router.get(
+  "/data",
+  requirePermission("view:data"),
+  filterGuestSensorPayload,
+  async (req, res): Promise<void> => {
   // source=device1
   const source = typeof req.query["source"] === "string" ? req.query["source"] : typeof req.query["device"] === "string" ? req.query["device"] : null;
   
@@ -43,10 +51,11 @@ router.get("/data", async (req, res): Promise<void> => {
     warnings: data.warnings,
   };
   res.json(GetSensorDataResponse.parse(response));
-});
+  },
+);
 
 // POST /api/data - accept sensor readings from WiFi devices or other external sources
-router.post("/data", async (req, res): Promise<void> => {
+router.post("/data", requirePermission("ingest:data"), async (req, res): Promise<void> => {
   const body = req.body as Record<string, unknown> | null;
 
   const temperature = body?.["temperature"];
@@ -89,7 +98,7 @@ router.post("/data", async (req, res): Promise<void> => {
 });
 
 // GET /api/data/history?limit=100 - returns recent readings from PostgreSQL
-router.get("/data/history", async (req, res): Promise<void> => {
+router.get("/data/history", requirePermission("view:history"), async (req, res): Promise<void> => {
   const parsedLimit = Number(req.query["limit"] ?? 100);
   const limit = Number.isNaN(parsedLimit) ? 100 : parsedLimit;
 
@@ -104,7 +113,7 @@ router.get("/data/history", async (req, res): Promise<void> => {
 });
 
 // POST /api/control - send command to Yolobit (1-10)
-router.post("/control", async (req, res): Promise<void> => {
+router.post("/control", requirePermission("control:device"), async (req, res): Promise<void> => {
   const parsed = SendCommandBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -124,12 +133,12 @@ router.post("/control", async (req, res): Promise<void> => {
 });
 
 // GET /api/thresholds - get current alert thresholds
-router.get("/thresholds", async (_req, res): Promise<void> => {
+router.get("/thresholds", requirePermission("view:thresholds"), async (_req, res): Promise<void> => {
   res.json(GetThresholdsResponse.parse(getThresholds()));
 });
 
 // POST /api/thresholds - update alert thresholds
-router.post("/thresholds", async (req, res): Promise<void> => {
+router.post("/thresholds", requirePermission("edit:thresholds"), async (req, res): Promise<void> => {
   const parsed = SetThresholdsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -140,12 +149,12 @@ router.post("/thresholds", async (req, res): Promise<void> => {
 });
 
 // GET /api/connection - get connection status
-router.get("/connection", async (_req, res): Promise<void> => {
+router.get("/connection", requirePermission("view:connection"), async (_req, res): Promise<void> => {
   res.json(GetConnectionStatusResponse.parse(getConnectionStatus()));
 });
 
 // POST /api/connection - connect to device
-router.post("/connection", async (req, res): Promise<void> => {
+router.post("/connection", requirePermission("manage:connection"), async (req, res): Promise<void> => {
   const parsed = ConnectDeviceBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -169,13 +178,13 @@ router.post("/connection", async (req, res): Promise<void> => {
 });
 
 // DELETE /api/connection - disconnect device
-router.delete("/connection", async (_req, res): Promise<void> => {
+router.delete("/connection", requirePermission("manage:connection"), async (_req, res): Promise<void> => {
   await disconnect();
   res.json(GetConnectionStatusResponse.parse(getConnectionStatus()));
 });
 
 // GET /api/ports - list available serial ports
-router.get("/ports", async (_req, res): Promise<void> => {
+router.get("/ports", requirePermission("view:ports"), async (_req, res): Promise<void> => {
   const ports = await getAvailablePorts();
   res.json(ListSerialPortsResponse.parse({ ports }));
 });

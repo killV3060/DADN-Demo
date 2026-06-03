@@ -1,10 +1,13 @@
 import { config as loadEnv } from "dotenv";
 import app from "./app";
+import { seedDefaultUsers } from "./lib/auth/seed";
 import { logger } from "./lib/logger";
 import { initMqttClient } from "./lib/mqtt";
 import { applyMqttSensorData } from "./lib/yolobit";
 
 loadEnv();
+
+void seedDefaultUsers();
 
 initMqttClient({
   onSensorMessage: applyMqttSensorData,

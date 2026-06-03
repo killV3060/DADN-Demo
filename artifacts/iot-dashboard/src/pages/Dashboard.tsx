@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
+import { Link } from "wouter";
 import { useGetSensorData, useGetConnectionStatus } from "@workspace/api-client-react";
 import { format } from "date-fns";
-import { Activity, Droplets, Sun, AlertTriangle, Cpu } from "lucide-react";
+import { Activity, Droplets, LogIn, LogOut, Sun, AlertTriangle, Cpu, UserCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { SensorCard } from "@/components/dashboard/SensorCard";
 import { ControlPanel } from "@/components/dashboard/ControlPanel";
 import { ConnectionPanel } from "@/components/dashboard/ConnectionPanel";
 import { ThresholdSettings } from "@/components/dashboard/ThresholdSettings";
+import { RoleGuard } from "@/components/auth/RoleGuard";
+import { useAuth } from "@/contexts/AuthContext";
+import VoiceControl from "@/components/dashboard/VoiceControl";
 
 type DashboardMode = "demo" | "serial" | "wifi";
 
@@ -71,10 +75,13 @@ function readInitialScope(): DashboardScope {
 }
 
 export default function Dashboard() {
+  const { role, user, isAuthenticated, logout, can } = useAuth();
+  const isGuest = role === "guest";
   const [scope, setScope] = useState<DashboardScope>(() => readInitialScope());
+
   const { data: sensorData, isError, error } = useGetSensorData({
     query: {
-      queryKey: ["sensor-data", scope.mode, scope.mode === "wifi" ? scope.wifiDeviceId : scope.serialPort],
+      queryKey: ["sensor-data", scope.mode, scope.mode === "wifi" ? scope.wifiDeviceId : scope.serialPort, role],
       refetchInterval: 1000,
       retry: 2,
     },
@@ -86,10 +93,17 @@ export default function Dashboard() {
           : { source: "demo" },
     },
   });
-  
-  const { data: connectionData } = useGetConnectionStatus();
 
-  const hasWarnings = sensorData?.warnings?.temperatureHigh || sensorData?.warnings?.humidityLow;
+  const { data: connectionData } = useGetConnectionStatus({
+    query: {
+      enabled: can("view:connection"),
+      refetchInterval: can("view:connection") ? 5000 : false,
+    },
+  });
+
+  const hasWarnings =
+    !isGuest &&
+    (sensorData?.warnings?.temperatureHigh || sensorData?.warnings?.humidityLow);
   const isConnected = connectionData?.connected;
   const scopeLabel = buildScopeLabel(scope);
 
@@ -116,14 +130,13 @@ export default function Dashboard() {
     window.history.replaceState({}, "", nextUrl);
   }, [scope]);
 
-  const formattedTime = sensorData?.timestamp 
+  const formattedTime = sensorData?.timestamp
     ? format(new Date(sensorData.timestamp), "HH:mm:ss.SSS")
     : "--:--:--";
 
   return (
     <div className="min-h-screen pb-12 pt-6 px-4 sm:px-6 lg:px-8 max-w-[1400px] mx-auto space-y-8">
-      
-      {/* HEADER */}
+
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-10">
         <div>
           <div className="flex items-center gap-3 mb-2">
@@ -136,28 +149,67 @@ export default function Dashboard() {
           </div>
           <p className="text-muted-foreground ml-14">IoT Telemetry & Control Center</p>
           <div className="ml-14 mt-3 inline-flex items-center gap-2 rounded-full border border-border/50 bg-card/40 px-3 py-1 text-xs font-medium text-muted-foreground">
-            <span className="uppercase tracking-wider">Viewing</span>
-            <span className="font-mono text-foreground">{scopeLabel}</span>
+            <span className="uppercase tracking-wider">Role</span>
+            <span className="font-mono text-foreground capitalize">{role}</span>
+            {user && (
+              <>
+                <span className="text-border">|</span>
+                <UserCircle2 className="w-3.5 h-3.5" />
+                <span className="font-mono text-foreground">{user.username}</span>
+              </>
+            )}
           </div>
+          {!isGuest && (
+            <div className="ml-14 mt-2 inline-flex items-center gap-2 rounded-full border border-border/50 bg-card/40 px-3 py-1 text-xs font-medium text-muted-foreground">
+              <span className="uppercase tracking-wider">Viewing</span>
+              <span className="font-mono text-foreground">{scopeLabel}</span>
+            </div>
+          )}
         </div>
-        
-        <div className="flex items-center gap-3 bg-card/40 backdrop-blur-sm border border-border/50 px-4 py-2 rounded-full">
-          <div className="flex flex-col items-end">
-            <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Last Sync</span>
-            <span className="font-mono font-medium text-foreground">{formattedTime}</span>
+
+        <div className="flex flex-col sm:items-end gap-3">
+          <div className="flex items-center gap-2">
+            {isAuthenticated ? (
+              <button
+                type="button"
+                onClick={logout}
+                className="inline-flex items-center gap-2 rounded-full border border-border/50 bg-card/40 px-4 py-2 text-sm hover:bg-accent"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign out
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-4 py-2 text-sm text-primary hover:bg-primary/20"
+              >
+                <LogIn className="w-4 h-4" />
+                Sign in
+              </Link>
+            )}
           </div>
-          <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-success animate-pulse' : 'bg-muted'} shadow-[0_0_10px_rgba(var(--success),0.5)]`} />
+
+          <div className="flex items-center gap-3 bg-card/40 backdrop-blur-sm border border-border/50 px-4 py-2 rounded-full">
+            <div className="flex flex-col items-end">
+              <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Last Sync</span>
+              <span className="font-mono font-medium text-foreground">{formattedTime}</span>
+            </div>
+            {can("view:connection") && (
+              <div className={`w-3 h-3 rounded-full ${isConnected ? "bg-success animate-pulse" : "bg-muted"} shadow-[0_0_10px_rgba(var(--success),0.5)]`} />
+            )}
+          </div>
         </div>
       </header>
 
-      {/* CONNECTION PANEL */}
-      <ConnectionPanel
-        scope={scope}
-        scopeLabel={scopeLabel}
-        onScopeChange={setScope}
-      />
+      <RoleGuard permission="view:connection">
+        <ConnectionPanel
+          scope={scope}
+          scopeLabel={scopeLabel}
+          onScopeChange={setScope}
+          readOnly={!can("manage:connection")}
+        />
+      </RoleGuard>
 
-      {/* WARNING BANNER */}
       <AnimatePresence>
         {hasWarnings && (
           <motion.div
@@ -182,58 +234,62 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
-      {/* API ERROR BANNER */}
       {isError && (
-         <div className="bg-warning/10 border border-warning/30 rounded-2xl p-4 flex items-center gap-4">
-           <AlertTriangle className="w-5 h-5 text-warning shrink-0" />
-           <p className="text-warning/90 text-sm">
-             Cannot reach telemetry endpoint. Retrying... 
-             <span className="font-mono text-xs opacity-70 ml-2">({(error as any)?.message || 'Network error'})</span>
-           </p>
-         </div>
+        <div className="bg-warning/10 border border-warning/30 rounded-2xl p-4 flex items-center gap-4">
+          <AlertTriangle className="w-5 h-5 text-warning shrink-0" />
+          <p className="text-warning/90 text-sm">
+            Cannot reach telemetry endpoint. Retrying...
+            <span className="font-mono text-xs opacity-70 ml-2">
+              ({error instanceof Error ? error.message : "Network error"})
+            </span>
+          </p>
+        </div>
       )}
 
-      {/* MAIN DASHBOARD GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* LEFT COLUMN: SENSORS (Spans 8 cols on desktop) */}
-        <div className="lg:col-span-8 space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <SensorCard 
-              title="Temperature" 
-              value={sensorData?.temperature ?? null} 
-              unit="°C" 
-              icon={Activity} 
-              colorClass="bg-rose-500" 
-              isWarning={sensorData?.warnings?.temperatureHigh}
+        <div className={`space-y-8 ${isGuest ? "lg:col-span-12" : "lg:col-span-8"}`}>
+          <div className={`grid gap-6 ${isGuest ? "grid-cols-1 md:grid-cols-2 max-w-3xl mx-auto" : "grid-cols-1 md:grid-cols-3"}`}>
+            <SensorCard
+              title="Temperature"
+              value={sensorData?.temperature ?? null}
+              unit="°C"
+              icon={Activity}
+              colorClass="bg-rose-500"
+              isWarning={!isGuest && sensorData?.warnings?.temperatureHigh}
               delay={0.1}
             />
-            <SensorCard 
-              title="Humidity" 
-              value={sensorData?.humidity ?? null} 
-              unit="%" 
-              icon={Droplets} 
+            <SensorCard
+              title="Humidity"
+              value={sensorData?.humidity ?? null}
+              unit="%"
+              icon={Droplets}
               colorClass="bg-cyan-500"
-              isWarning={sensorData?.warnings?.humidityLow}
+              isWarning={!isGuest && sensorData?.warnings?.humidityLow}
               delay={0.2}
             />
-            <SensorCard 
-              title="Luminosity" 
-              value={sensorData?.luminosity ?? null} 
-              unit="lx" 
-              icon={Sun} 
-              colorClass="bg-amber-400"
-              delay={0.3}
-            />
+            <RoleGuard minRole="user">
+              <SensorCard
+                title="Luminosity"
+                value={sensorData?.luminosity ?? null}
+                unit="lx"
+                icon={Sun}
+                colorClass="bg-amber-400"
+                delay={0.3}
+              />
+            </RoleGuard>
           </div>
 
-          <ControlPanel scopeLabel={scopeLabel} />
+          <RoleGuard permission="control:device">
+            <ControlPanel scopeLabel={scopeLabel} />
+            <VoiceControl scopeLabel={scopeLabel} />
+          </RoleGuard>
         </div>
 
-        {/* RIGHT COLUMN: SETTINGS (Spans 4 cols on desktop) */}
-        <div className="lg:col-span-4">
-          <ThresholdSettings scopeLabel={scopeLabel} />
-        </div>
+        <RoleGuard permission="view:thresholds">
+          <div className="lg:col-span-4">
+            <ThresholdSettings scopeLabel={scopeLabel} />
+          </div>
+        </RoleGuard>
 
       </div>
     </div>

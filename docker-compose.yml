@@ -39,6 +39,8 @@ services:
       MQTT_URL: mqtt://mqtt:1883
       MQTT_SENSOR_TOPIC: yolobit/sensor/+
       MQTT_COMMAND_TOPIC: yolobit/command
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in environment or .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
     depends_on:
       mqtt:
         condition: service_started
@@ -60,6 +62,9 @@ services:
       - api-server
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
 
 volumes:
   postgres_data:

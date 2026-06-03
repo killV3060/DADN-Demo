@@ -1,6 +1,10 @@
 # Yolobit Smart Home IoT Dashboard
 
-Hệ thống giám sát và điều khiển IoT thời gian thực cho bo mạch Yolobit. Dự án sử dụng kiến trúc full-stack MVC, đọc dữ liệu cảm biến từ phần cứng qua cổng Serial (USB), hiển thị trực tiếp trên web dashboard hiện đại.
+Hệ thống giám sát và điều khiển IoT thời gian thực cho bo mạch Yolobit. Dự án sử dụng kiến trúc full-stack MVC, đọc dữ liệu cảm biến từ phần cứng qua cổng Serial (USB) hoặc MQTT, hiển thị trực tiếp trên web dashboard hiện đại.
+
+Hệ thống có **RBAC (Role-Based Access Control)** với JWT: phân quyền theo vai trò `admin`, `developer`, `user` và khách `guest` (chưa đăng nhập). Luồng USB/MQTT và polling realtime **không bị thay đổi** — RBAC chỉ áp dụng trên HTTP API và giao diện.
+
+> Tài liệu chi tiết RBAC: [READMEPRIORITY.md](./READMEPRIORITY.md)
 
 ---
 
@@ -39,9 +43,21 @@ API_PORT=8080
 WEB_PORT=5173
 BASE_PATH=/
 DATABASE_URL=postgres://postgres:password@localhost:5432/yolobit_db
+JWT_SECRET=change-me-to-a-long-random-secret-in-production
+JWT_EXPIRES_IN=24h
 MQTT_URL=mqtt://localhost:1883
-MQTT_SENSOR_TOPIC=yolobit/sensor
+MQTT_SENSOR_TOPIC=yolobit/sensor/+
 MQTT_COMMAND_TOPIC=yolobit/command
+```
+
+Hoặc sao chép từ mẫu: `cp .env.example .env`
+
+### 3.1. Khởi tạo cơ sở dữ liệu (PostgreSQL)
+
+Chạy migration Drizzle để tạo bảng cảm biến, lệnh và **bảng `users`** (RBAC):
+
+```bash
+pnpm push
 ```
 
 ### 4. Chạy Backend (API Server)
@@ -52,7 +68,8 @@ Mở terminal **thứ nhất**, chạy:
 pnpm --filter @workspace/api-server run dev
 ```
 
-> Server sẽ khởi động tại `http://localhost:8080`
+> Server sẽ khởi động tại `http://localhost:8080`  
+> Lần đầu chạy (bảng `users` trống), API tự seed tài khoản demo: `admin`, `developer`, `user`.
 
 ### 5. Chạy Frontend (Dashboard)
 
@@ -83,10 +100,12 @@ cd <repo-folder>
 Sau đó tiến hành build app bằng lệnh:
 
 ```bash
-docker compose up
+# File .env ở thư mục gốc phải có JWT_SECRET
+docker compose up --build
 ```
 
-> Sau khi build xong, Dashboard sẽ được mở tại `http://localhost:80`
+> Sau khi build xong, Dashboard sẽ được mở tại `http://localhost:80`  
+> Docker Compose truyền `JWT_SECRET` và `JWT_EXPIRES_IN` vào service `api-server`.
 
 ## Kết nối Yolobit qua USB (COM3)
 
@@ -111,10 +130,41 @@ Dùng phần mềm **Yolo:Bit IDE** hoặc **Thonny** để upload file `yolobit
 
 ### Bước 4 — Kết nối trong Dashboard
 
-1. Mở `http://localhost:5173` trên trình duyệt
+1. Mở `http://localhost:5173` và **đăng nhập tài khoản `admin`** (kết nối USB/COM yêu cầu quyền admin)
 2. Ở panel **Device Status** phía trên trang, chọn **COM3** từ dropdown
 3. Nhấn nút **Connect**
 4. Đèn trạng thái chuyển sang **xanh lá** → dữ liệu cảm biến bắt đầu cập nhật theo thời gian thực
+
+> Role `user` chỉ **xem** trạng thái kết nối (read-only). Role `guest` / `developer` không có panel quản lý kết nối.
+
+---
+
+## Đăng nhập & Phân quyền (RBAC)
+
+### Vai trò
+
+| Vai trò | Mô tả |
+|--------|--------|
+| **guest** | Chưa đăng nhập — chỉ xem nhiệt độ & độ ẩm |
+| **user** | Xem dashboard, trạng thái kết nối — không điều khiển thiết bị / ngưỡng |
+| **developer** | Xem dashboard, chỉnh ngưỡng, xem lịch sử — không điều khiển vật lý / quản lý user |
+| **admin** | Toàn quyền: điều khiển, kết nối USB/MQTT, quản lý user |
+
+### Tài khoản demo (seed tự động)
+
+| Username | Password | Role |
+|----------|----------|------|
+| admin | admin123 | admin |
+| developer | dev123 | developer |
+| user | user123 | user |
+
+### Trên Dashboard
+
+1. Mở `http://localhost:5173` — truy cập **guest** (2 thẻ cảm biến).
+2. Vào **Sign in** (`/login`) hoặc đăng nhập trực tiếp.
+3. Giao diện thay đổi theo role (nút điều khiển, kết nối COM, ngưỡng chỉ hiện khi được phép).
+
+Token JWT lưu trong `localStorage`; các API được bảo vệ gửi header `Authorization: Bearer <token>`.
 
 ---
 
@@ -122,9 +172,12 @@ Dùng phần mềm **Yolo:Bit IDE** hoặc **Thonny** để upload file `yolobit
 
 Nếu chưa có Yolobit hoặc muốn test giao diện:
 
-1. Trong dropdown cổng, chọn **demo**
-2. Nhấn **Connect**
-3. Hệ thống sẽ tự sinh dữ liệu giả lập nhiệt độ, độ ẩm, ánh sáng dao động tự nhiên
+1. Đăng nhập **`admin`**
+2. Trong dropdown cổng, chọn **demo**
+3. Nhấn **Connect**
+4. Hệ thống sẽ tự sinh dữ liệu giả lập nhiệt độ, độ ẩm, ánh sáng dao động tự nhiên
+
+> **Guest** vẫn xem được telemetry demo qua `GET /api/data` (polling 1s) mà không cần Connect.
 
 ---
 
@@ -133,22 +186,34 @@ Nếu chưa có Yolobit hoặc muốn test giao diện:
 ```
 workspace/
 ├── artifacts/
-│   ├── api-server/          # Backend Express API (đọc serial, xử lý lệnh)
+│   ├── api-server/              # Backend Express API (serial, MQTT, auth)
 │   │   └── src/
 │   │       ├── lib/
-│   │       │   └── yolobit.ts   # Model: kết nối serial, parse dữ liệu
+│   │       │   ├── yolobit.ts   # Model: USB serial, parse dữ liệu (không đổi)
+│   │       │   ├── mqtt.ts      # MQTT client (không đổi)
+│   │       │   └── auth/        # JWT, bcrypt, seed user
+│   │       ├── middleware/
+│   │       │   └── auth.ts      # RBAC + guest filter
 │   │       └── routes/
-│   │           └── iot.ts       # Controller: các API endpoint
-│   └── iot-dashboard/       # Frontend React + Vite
+│   │           ├── iot.ts       # Controller IoT (middleware bảo vệ)
+│   │           └── auth.ts      # login, register, me
+│   └── iot-dashboard/           # Frontend React + Vite
 │       └── src/
+│           ├── contexts/
+│           │   └── AuthContext.tsx
 │           ├── pages/
-│           │   └── Dashboard.tsx
+│           │   ├── Dashboard.tsx
+│           │   └── Login.tsx
 │           └── components/
-│               └── dashboard/   # SensorCard, ControlPanel, v.v.
+│               ├── auth/        # RoleGuard, ProtectedRoute
+│               └── dashboard/
 ├── lib/
-│   ├── api-spec/            # OpenAPI spec (hợp đồng API)
-│   ├── api-zod/             # Zod schema tự động sinh từ OpenAPI
-│   └── api-client-react/    # React Query hooks tự động sinh từ OpenAPI
+│   ├── rbac/                # Enum role & ma trận permission (dùng chung FE/BE)
+│   ├── db/                  # Drizzle schema (sensor, users, …)
+│   ├── api-spec/
+│   ├── api-zod/
+│   └── api-client-react/
+├── READMEPRIORITY.md        # Hướng dẫn RBAC đầy đủ (tiếng Anh)
 └── README.md
 ```
 
@@ -166,6 +231,9 @@ workspace/
 | **Build Tool** | Vite | Dev server & bundle |
 | **Styling** | Tailwind CSS | Giao diện dark mode IoT |
 | **Monorepo** | pnpm workspaces | Quản lý frontend + backend chung |
+| **Database** | PostgreSQL + Drizzle ORM | Lịch sử cảm biến, bảng `users` |
+| **Auth** | JWT + bcrypt | Đăng nhập, phân quyền API |
+| **RBAC** | `@workspace/rbac` | Ma trận permission dùng chung |
 
 ---
 
@@ -184,7 +252,8 @@ Yolobit Board
 └──────────────────┬──────────────────────┘
                    │
 ┌──────────────────▼──────────────────────┐
-│  CONTROLLER — iot.ts                    │
+│  CONTROLLER — iot.ts + middleware RBAC  │
+│  JWT (tuỳ chọn) → role: guest|user|…  │
 │  GET  /api/data      → JSON cảm biến    │
 │  POST /api/control   → ghi lệnh serial  │
 │  GET  /api/thresholds→ ngưỡng cảnh báo  │
@@ -212,16 +281,62 @@ Yolobit Board
 
 ## API Endpoints
 
-| Method | Endpoint | Mô tả |
-|---|---|---|
-| GET | `/api/data` | Dữ liệu cảm biến mới nhất |
-| GET | `/api/data/history?limit=100` | Lịch sử dữ liệu cảm biến từ PostgreSQL |
-| POST | `/api/control` | Gửi lệnh điều khiển (1–10) |
-| GET | `/api/thresholds` | Lấy ngưỡng cảnh báo |
-| POST | `/api/thresholds` | Cập nhật ngưỡng |
-| GET | `/api/connection` | Trạng thái kết nối |
-| POST | `/api/connection` | Kết nối cổng COM hoặc demo |
-| GET | `/api/ports` | Danh sách cổng COM có sẵn |
+### Xác thực (`/api/auth`)
+
+| Method | Endpoint | Mô tả | Quyền |
+|---|---|---|---|
+| POST | `/api/auth/login` | Đăng nhập, nhận JWT | Công khai |
+| POST | `/api/auth/register` | Đăng ký (mặc định `user`) | Công khai |
+| GET | `/api/auth/me` | Thông tin user hiện tại | Đã đăng nhập |
+| GET | `/api/auth/users` | Danh sách user | `admin` |
+
+### IoT (`/api`)
+
+| Method | Endpoint | Mô tả | Quyền tối thiểu |
+|---|---|---|---|
+| GET | `/api/data` | Dữ liệu cảm biến mới nhất | Công khai / guest |
+| POST | `/api/data` | Nhận telemetry từ WiFi/thiết bị ngoài | `admin` |
+| GET | `/api/data/history?limit=100` | Lịch sử từ PostgreSQL | `developer`, `admin` |
+| POST | `/api/control` | Gửi lệnh điều khiển (1–10) | `admin` |
+| GET | `/api/thresholds` | Lấy ngưỡng cảnh báo | `developer`, `admin` |
+| POST | `/api/thresholds` | Cập nhật ngưỡng | `developer`, `admin` |
+| GET | `/api/connection` | Trạng thái kết nối | `user`, `admin` |
+| POST | `/api/connection` | Kết nối cổng COM hoặc demo | `admin` |
+| DELETE | `/api/connection` | Ngắt kết nối | `admin` |
+| GET | `/api/ports` | Danh sách cổng COM | `admin` |
+
+**Mã HTTP:** `401 Unauthorized` (token thiếu/hết hạn), `403 Forbidden` (đủ đăng nhập nhưng thiếu quyền).
+
+**Guest** gọi `GET /api/data`: API trả về chỉ nhiệt độ & độ ẩm (ẩn độ sáng và cảnh báo ngưỡng).
+
+### Ma trận quyền (tóm tắt)
+
+| Quyền | guest | user | developer | admin |
+|-------|:-----:|:----:|:---------:|:-----:|
+| Xem telemetry (`GET /data`) | ✓ | ✓ | ✓ | ✓ |
+| Xem trạng thái kết nối | | ✓ | | ✓ |
+| Xem / sửa ngưỡng | | | ✓ | ✓ |
+| Xem lịch sử | | | ✓ | ✓ |
+| Điều khiển thiết bị | | | | ✓ |
+| Quản lý kết nối USB/demo | | | | ✓ |
+| Quản lý user | | | | ✓ |
+
+### Kiểm thử nhanh (curl)
+
+```bash
+# Guest
+curl http://localhost:8080/api/data
+
+# Đăng nhập admin
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"admin\",\"password\":\"admin123\"}"
+
+# Dùng token (thay TOKEN bằng accessToken trong response)
+curl http://localhost:8080/api/connection -H "Authorization: Bearer TOKEN"
+```
+
+Chi tiết middleware, JWT flow và test UI: [READMEPRIORITY.md](./READMEPRIORITY.md).
 
 ## MQTT pub/sub
 
@@ -249,6 +364,8 @@ Yolobit Board
 
 ## Lưu ý khi chạy trên Windows
 
+- **JWT_SECRET** bắt buộc khi chạy API — không hardcode trong code; dùng `.env` hoặc biến Docker
+- Sau `pnpm install`, nếu lỗi `bcrypt`: package đã khai báo trong `onlyBuiltDependencies` — chạy lại `pnpm install`
 - Nếu `COM3` không xuất hiện trong dropdown, kiểm tra lại driver CH340 và thử rút cắm lại USB
 - Baud rate mặc định là **115200** — phải khớp với cấu hình trong `yolobit.py`
 - Chỉ **một chương trình** được mở cổng COM tại một thời điểm — đóng Thonny/IDE trước khi dùng dashboard

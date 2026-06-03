@@ -20,11 +20,13 @@ interface ConnectionPanelProps {
   scope: DashboardScope;
   scopeLabel: string;
   onScopeChange: (scope: DashboardScope) => void;
+  /** Read-only status view for authenticated users without connection management. */
+  readOnly?: boolean;
 }
 
 const WIFI_DEVICE_OPTIONS = ["device1", "device2", "device3"];
 
-export function ConnectionPanel({ scope, scopeLabel, onScopeChange }: ConnectionPanelProps) {
+export function ConnectionPanel({ scope, scopeLabel, onScopeChange, readOnly = false }: ConnectionPanelProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -34,7 +36,9 @@ export function ConnectionPanel({ scope, scopeLabel, onScopeChange }: Connection
       refetchInterval: 5000 } // Poll status every 5s
   });
 
-  const { data: portsData, refetch: refetchPorts, isFetching: fetchingPorts } = useListSerialPorts();
+  const { data: portsData, refetch: refetchPorts, isFetching: fetchingPorts } = useListSerialPorts({
+    query: { enabled: !readOnly },
+  });
 
   const { mutate: connect, isPending: isConnecting } = useConnectDevice({
     mutation: {
@@ -119,6 +123,7 @@ export function ConnectionPanel({ scope, scopeLabel, onScopeChange }: Connection
         </div>
       </div>
 
+      {!readOnly && (
       <div className="flex flex-col gap-3 w-full sm:w-auto">
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <div className="relative flex-1 sm:w-48">
@@ -205,6 +210,7 @@ export function ConnectionPanel({ scope, scopeLabel, onScopeChange }: Connection
           </div>
         )}
       </div>
+      )}
     </GlassCard>
   );
 }
