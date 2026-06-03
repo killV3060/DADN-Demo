@@ -11,6 +11,7 @@ import { ConnectionPanel } from "@/components/dashboard/ConnectionPanel";
 import { ThresholdSettings } from "@/components/dashboard/ThresholdSettings";
 import { RoleGuard } from "@/components/auth/RoleGuard";
 import { useAuth } from "@/contexts/AuthContext";
+import VoiceControl from "@/components/dashboard/VoiceControl";
 
 type DashboardMode = "demo" | "serial" | "wifi";
 
@@ -280,6 +281,7 @@ export default function Dashboard() {
 
           <RoleGuard permission="control:device">
             <ControlPanel scopeLabel={scopeLabel} />
+            <VoiceControl scopeLabel={scopeLabel} />
           </RoleGuard>
         </div>
 
@@ -288,6 +290,7 @@ export default function Dashboard() {
             <ThresholdSettings scopeLabel={scopeLabel} />
           </div>
         </RoleGuard>
+
       </div>
     </div>
   );
