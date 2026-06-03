@@ -8,6 +8,7 @@ import {
   publishSensorPayload,
   type SensorTopicPayload,
 } from "./mqtt";
+import { emitSensorUpdate } from "./realtime";
 
 // Sensor data state (in-memory, updated by serial reader)
 interface SensorState {
@@ -89,6 +90,15 @@ async function persistSensorReading(input: SensorReadingInput): Promise<void> {
   state.timestamp = snapshot.timestamp;
 
   cacheSnapshot(input.source, snapshot);
+
+  emitSensorUpdate({
+    source: input.source,
+    temperature: snapshot.temperature,
+    humidity: snapshot.humidity,
+    luminosity: snapshot.luminosity,
+    timestamp: snapshot.timestamp,
+    warnings: getWarningsForSnapshot(snapshot),
+  });
 
   const payload = toSensorPayload(input.source, snapshot);
   await saveSensorReading({

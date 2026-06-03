@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useGetSensorData, useGetConnectionStatus } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { Activity, Droplets, LogIn, LogOut, Sun, AlertTriangle, Cpu, UserCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { io, type Socket } from "socket.io-client";
 
 import { SensorCard } from "@/components/dashboard/SensorCard";
 import { ControlPanel } from "@/components/dashboard/ControlPanel";
@@ -19,6 +20,18 @@ interface DashboardScope {
   mode: DashboardMode;
   serialPort: string;
   wifiDeviceId: string;
+}
+
+interface RealtimeSensorEvent {
+  source: string;
+  temperature: number | null;
+  humidity: number | null;
+  luminosity: number | null;
+  timestamp: string | null;
+  warnings: {
+    temperatureHigh: boolean;
+    humidityLow: boolean;
+  };
 }
 
 const DEFAULT_SCOPE: DashboardScope = {
@@ -78,11 +91,67 @@ export default function Dashboard() {
   const { role, user, isAuthenticated, logout, can } = useAuth();
   const isGuest = role === "guest";
   const [scope, setScope] = useState<DashboardScope>(() => readInitialScope());
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
+  const [liveSensorData, setLiveSensorData] = useState<RealtimeSensorEvent | null>(null);
+  const scopeRef = useRef<DashboardScope>(scope);
+
+  useEffect(() => {
+    scopeRef.current = scope;
+    setLiveSensorData(null);
+  }, [scope]);
+
+  useEffect(() => {
+    const socket: Socket = io({
+      path: "/socket.io",
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+    });
+
+    const handleConnect = () => {
+      setIsRealtimeConnected(true);
+    };
+
+    const handleDisconnect = () => {
+      setIsRealtimeConnected(false);
+    };
+
+    const handleSensorUpdate = (payload: RealtimeSensorEvent) => {
+      const currentScope = scopeRef.current;
+
+      if (!payload || typeof payload.source !== "string") {
+        return;
+      }
+
+      const matched =
+        currentScope.mode === "wifi"
+          ? payload.source === currentScope.wifiDeviceId
+          : currentScope.mode === "serial"
+            ? payload.source === "serial" || payload.source === currentScope.serialPort
+            : payload.source === "demo";
+
+      if (!matched) {
+        return;
+      }
+
+      setLiveSensorData(payload);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("sensor:update", handleSensorUpdate);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("sensor:update", handleSensorUpdate);
+      socket.disconnect();
+    };
+  }, []);
 
   const { data: sensorData, isError, error } = useGetSensorData({
     query: {
       queryKey: ["sensor-data", scope.mode, scope.mode === "wifi" ? scope.wifiDeviceId : scope.serialPort, role],
-      refetchInterval: 1000,
+      refetchInterval: isRealtimeConnected ? 10000 : 1000,
       retry: 2,
     },
     request: {
@@ -103,9 +172,11 @@ export default function Dashboard() {
 
   const hasWarnings =
     !isGuest &&
-    (sensorData?.warnings?.temperatureHigh || sensorData?.warnings?.humidityLow);
+    ((liveSensorData ?? sensorData)?.warnings?.temperatureHigh || (liveSensorData ?? sensorData)?.warnings?.humidityLow);
   const isConnected = connectionData?.connected;
   const scopeLabel = buildScopeLabel(scope);
+
+  const displayedSensorData = useMemo(() => liveSensorData ?? sensorData, [liveSensorData, sensorData]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -130,8 +201,8 @@ export default function Dashboard() {
     window.history.replaceState({}, "", nextUrl);
   }, [scope]);
 
-  const formattedTime = sensorData?.timestamp
-    ? format(new Date(sensorData.timestamp), "HH:mm:ss.SSS")
+  const formattedTime = displayedSensorData?.timestamp
+    ? format(new Date(displayedSensorData.timestamp), "HH:mm:ss.SSS")
     : "--:--:--";
 
   return (
@@ -197,6 +268,7 @@ export default function Dashboard() {
             {can("view:connection") && (
               <div className={`w-3 h-3 rounded-full ${isConnected ? "bg-success animate-pulse" : "bg-muted"} shadow-[0_0_10px_rgba(var(--success),0.5)]`} />
             )}
+            <div className={`w-2.5 h-2.5 rounded-full ${isRealtimeConnected ? "bg-primary animate-pulse" : "bg-muted"}`} title={isRealtimeConnected ? "Realtime connected" : "Realtime disconnected"} />
           </div>
         </div>
       </header>
@@ -225,8 +297,8 @@ export default function Dashboard() {
               <div>
                 <h3 className="text-destructive font-semibold font-display text-lg">System Alert</h3>
                 <p className="text-destructive/80 text-sm mt-1">
-                  {sensorData?.warnings?.temperatureHigh && "Temperature has exceeded maximum safe threshold. "}
-                  {sensorData?.warnings?.humidityLow && "Humidity levels have dropped below minimum requirements."}
+                  {displayedSensorData?.warnings?.temperatureHigh && "Temperature has exceeded maximum safe threshold. "}
+                  {displayedSensorData?.warnings?.humidityLow && "Humidity levels have dropped below minimum requirements."}
                 </p>
               </div>
             </div>
@@ -251,26 +323,26 @@ export default function Dashboard() {
           <div className={`grid gap-6 ${isGuest ? "grid-cols-1 md:grid-cols-2 max-w-3xl mx-auto" : "grid-cols-1 md:grid-cols-3"}`}>
             <SensorCard
               title="Temperature"
-              value={sensorData?.temperature ?? null}
+              value={displayedSensorData?.temperature ?? null}
               unit="°C"
               icon={Activity}
               colorClass="bg-rose-500"
-              isWarning={!isGuest && sensorData?.warnings?.temperatureHigh}
+              isWarning={!isGuest && displayedSensorData?.warnings?.temperatureHigh}
               delay={0.1}
             />
             <SensorCard
               title="Humidity"
-              value={sensorData?.humidity ?? null}
+              value={displayedSensorData?.humidity ?? null}
               unit="%"
               icon={Droplets}
               colorClass="bg-cyan-500"
-              isWarning={!isGuest && sensorData?.warnings?.humidityLow}
+              isWarning={!isGuest && displayedSensorData?.warnings?.humidityLow}
               delay={0.2}
             />
             <RoleGuard minRole="user">
               <SensorCard
                 title="Luminosity"
-                value={sensorData?.luminosity ?? null}
+                value={displayedSensorData?.luminosity ?? null}
                 unit="lx"
                 icon={Sun}
                 colorClass="bg-amber-400"

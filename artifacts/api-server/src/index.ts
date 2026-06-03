@@ -1,8 +1,10 @@
 import { config as loadEnv } from "dotenv";
+import { createServer } from "node:http";
 import app from "./app";
 import { seedDefaultUsers } from "./lib/auth/seed";
 import { logger } from "./lib/logger";
 import { initMqttClient } from "./lib/mqtt";
+import { initRealtime } from "./lib/realtime";
 import { applyMqttSensorData } from "./lib/yolobit";
 
 loadEnv();
@@ -27,6 +29,9 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid API_PORT value: "${rawPort}"`);
 }
 
-app.listen(port, () => {
+const server = createServer(app);
+initRealtime(server);
+
+server.listen(port, () => {
   logger.info({ port }, "Server listening");
 });

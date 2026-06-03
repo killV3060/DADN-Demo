@@ -58,7 +58,10 @@ function normalizeSpeechText(value: string): string {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, "d")
     .toLowerCase()
+    .replace(/\blet\b/g, "led")
+    .replace(/\bleds\b/g, "led")
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();

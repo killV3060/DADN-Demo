@@ -66,6 +66,10 @@ export default defineConfig(({ mode }) => {
       },
       proxy: {
         "/api": `http://localhost:${apiPort}`,
+        "/socket.io": {
+          target: `http://localhost:${apiPort}`,
+          ws: true,
+        },
       },
     },
     preview: {
